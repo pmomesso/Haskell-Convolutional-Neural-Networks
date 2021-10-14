@@ -4,8 +4,8 @@ import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
 type RealMatrix = M.Matrix Float
-type Kernel = [ M.Matrix Float ]
-type KernelTensor = [ Kernel ]
+type Kernel = V.Vector (M.Matrix Float)
+type KernelTensor = V.Vector Kernel
 type Bias = Float
 type BiasVector = V.Vector Bias
 type Activation = Float -> Float
