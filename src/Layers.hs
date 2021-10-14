@@ -53,18 +53,18 @@ convolve ker mat = let kerDim = M.nrows ker in
                    let cols = M.ncols mat in
                    M.matrix (rows - kerDim + 1) (cols - kerDim + 1) (applyKernel ker . window mat kerDim)
 
-convolveByChannel :: Num a => [M.Matrix a] -> [M.Matrix a] -> [M.Matrix a]
-convolveByChannel = zipWith convolve
+convolveByChannel :: Num a => V.Vector (M.Matrix a) -> V.Vector (M.Matrix a) -> V.Vector (M.Matrix a)
+convolveByChannel = V.zipWith convolve
 
-sumMatricesWithDim :: Num a => Int -> Int -> [M.Matrix a] -> M.Matrix a
+sumMatricesWithDim :: Num a => Int -> Int -> V.Vector (M.Matrix a) -> M.Matrix a
 sumMatricesWithDim rows cols
   = foldr (+) (M.matrix rows cols (const 0))
 
 {- Precond: forall m, n in mats: nrows m = nrows n and ncols m = nrcols n -}
-sumMatrices :: Num a => [M.Matrix a] -> M.Matrix a
-sumMatrices mats = let rows = M.nrows $ head mats in
-                   let cols = M.ncols $ head mats in
+sumMatrices :: Num a => V.Vector (M.Matrix a) -> M.Matrix a
+sumMatrices mats = let rows = M.nrows $ V.head mats in
+                   let cols = M.ncols $ V.head mats in
                        sumMatricesWithDim rows cols mats
 
-excitations :: Bias -> Kernel -> Image -> Image
-excitations bias kernel image = [ (+bias) <$> sumMatrices (convolveByChannel kernel image) ]
+kernelExcitation :: Float -> V.Vector (M.Matrix Float) -> V.Vector (M.Matrix Float) -> M.Matrix Float
+kernelExcitation bias kernel image = (+bias) <$> sumMatrices (convolveByChannel kernel image)
