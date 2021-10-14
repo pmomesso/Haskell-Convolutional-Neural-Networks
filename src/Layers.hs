@@ -19,7 +19,7 @@ data DenseLayer = DenseLayer RealMatrix BiasVector Activation ActivationDerivati
 type DenseNetwork = [ DenseLayer ]
 type ConvolutionalNetwork = [ TensorialLayer ]
 
-data NeuralNetwork = NeuralNetwork ConvolutionalNetwork DenseNetwork
+data NeuralNetwork = NeuralNetwork ConvolutionalNetwork DenseNetwork | JustDenseNetwork DenseNetwork
 
 windowIndices :: Int -> Int -> M.Matrix a -> [(Int, Int)]
 windowIndices numRows numCols rm = [(i, j) | i <- [1..(M.nrows rm - numRows + 1)], j <- [1..(M.ncols rm - numCols + 1)]]
@@ -81,6 +81,7 @@ tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) image =
                                                                                fmap (fmap act) excitationState
 tensorialActivation _ image = error "Unimplemented!"
 
+denseExcitation :: DenseLayer -> V.Vector Float -> V.Vector Float
 denseExcitation (DenseLayer mat bias _ _) x = let xColVector = M.colVector x in
                                               let biasColVector = M.colVector bias in
                                               M.getCol 1 $ mat * xColVector + biasColVector
@@ -94,6 +95,11 @@ denseActivation (DenseLayer mat bias act der) x = let excitation = denseExcitati
 denseActivation (SoftmaxLayer mat bias) x = let excitation = denseExcitation (SoftmaxLayer mat bias) x in
                                             softmax excitation
 
+softmax :: V.Vector Float -> V.Vector Float
 softmax vector = let exps = fmap exp vector in
                  let s = sum exps in
                  fmap (/s) exps
+
+forwardDenseNetwork :: DenseNetwork -> V.Vector Float -> V.Vector Float
+forwardDenseNetwork denseNetwork x = foldl denseActivation' x denseNetwork
+                                     where denseActivation' = flip denseActivation
