@@ -11,9 +11,9 @@ type BiasVector = V.Vector Bias
 type Activation = Float -> Float
 type ActivationDerivative = Float -> Float
 
-type Image = [ RealMatrix ]
+type Image = V.Vector RealMatrix
 
-data TensorialLayer = ConvolutionalLayer KernelTensor Bias Activation ActivationDerivative | MaxPoolingLayer Int Int
+data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int Int
 data DenseLayer = DenseLayer Activation ActivationDerivative RealMatrix BiasVector | SoftmaxLayer RealMatrix BiasVector
 
 type DenseNetwork = [ DenseLayer ]
@@ -66,5 +66,11 @@ sumMatrices mats = let rows = M.nrows $ V.head mats in
                    let cols = M.ncols $ V.head mats in
                        sumMatricesWithDim rows cols mats
 
-kernelExcitation :: Float -> V.Vector (M.Matrix Float) -> V.Vector (M.Matrix Float) -> M.Matrix Float
-kernelExcitation bias kernel image = (+bias) <$> sumMatrices (convolveByChannel kernel image)
+kernelExcitation kernel bias image = (bias+) <$> sumMatrices (convolveByChannel kernel image)
+
+convLayerExcitation :: KernelTensor -> BiasVector -> Image -> Image
+convLayerExcitation kernelTensor biasVector image = V.zipWith (\kernel bias -> kernelExcitation kernel bias image) kernelTensor biasVector
+
+tensorialExcitation :: TensorialLayer -> Image -> Image
+tensorialExcitation (ConvolutionalLayer kernelTensor biasVector _ _) = convLayerExcitation kernelTensor biasVector
+tensorialExcitation _ = error "Unimplemented!"
