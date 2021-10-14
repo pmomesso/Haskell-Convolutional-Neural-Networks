@@ -66,5 +66,5 @@ sumMatrices mats = let rows = M.nrows $ head mats in
                    let cols = M.ncols $ head mats in
                        sumMatricesWithDim rows cols mats
 
-excitations :: Bias -> Kernel -> Image -> M.Matrix Float
-excitations bias kernel image = sumMatrices $ convolveByChannel kernel image
+excitations :: Bias -> Kernel -> Image -> Image
+excitations bias kernel image = [ sumMatrices $ convolveByChannel kernel image ]
