@@ -66,11 +66,16 @@ sumMatrices mats = let rows = M.nrows $ V.head mats in
                    let cols = M.ncols $ V.head mats in
                        sumMatricesWithDim rows cols mats
 
+kernelExcitation :: Num a => V.Vector (M.Matrix a) -> a -> V.Vector (M.Matrix a) -> M.Matrix a
 kernelExcitation kernel bias image = (bias+) <$> sumMatrices (convolveByChannel kernel image)
 
-convLayerExcitation :: KernelTensor -> BiasVector -> Image -> Image
+convLayerExcitation :: Num a => V.Vector (V.Vector (M.Matrix a)) -> V.Vector a -> V.Vector (M.Matrix a) -> V.Vector (M.Matrix a)
 convLayerExcitation kernelTensor biasVector image = V.zipWith (\kernel bias -> kernelExcitation kernel bias image) kernelTensor biasVector
 
 tensorialExcitation :: TensorialLayer -> Image -> Image
 tensorialExcitation (ConvolutionalLayer kernelTensor biasVector _ _) = convLayerExcitation kernelTensor biasVector
 tensorialExcitation _ = error "Unimplemented!"
+
+tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) image = let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector act der) image in
+                                                                               fmap (fmap act) excitationState
+tensorialActivation _ image = error "Unimplemented!"
