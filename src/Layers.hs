@@ -4,13 +4,17 @@ import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
 type RealMatrix = M.Matrix Float
-type Kernel = [ RealMatrix ]
-type Bias = V.Vector Float
+type Kernel = [ M.Matrix Float ]
+type KernelTensor = [ Kernel ]
+type Bias = Float
+type BiasVector = V.Vector Bias
 type Activation = Float -> Float
 type ActivationDerivative = Float -> Float
 
-data TensorialLayer = ConvolutionalLayer Kernel | MaxPoolingLayer Int Int
-data DenseLayer = DenseLayer Activation ActivationDerivative RealMatrix Bias | SoftmaxLayer RealMatrix Bias
+type Image = [ RealMatrix ]
+
+data TensorialLayer = ConvolutionalLayer KernelTensor Bias Activation ActivationDerivative | MaxPoolingLayer Int Int
+data DenseLayer = DenseLayer Activation ActivationDerivative RealMatrix BiasVector | SoftmaxLayer RealMatrix BiasVector
 
 type DenseNetwork = [ DenseLayer ]
 type ConvolutionalNetwork = [ TensorialLayer ]
@@ -48,3 +52,19 @@ convolve ker mat = let kerDim = M.nrows ker in
                    let rows = M.nrows mat in
                    let cols = M.ncols mat in
                    M.matrix (rows - kerDim + 1) (cols - kerDim + 1) (applyKernel ker . window mat kerDim)
+
+convolveByChannel :: Num a => [M.Matrix a] -> [M.Matrix a] -> [M.Matrix a]
+convolveByChannel = zipWith convolve
+
+sumMatricesWithDim :: Num a => Int -> Int -> [M.Matrix a] -> M.Matrix a
+sumMatricesWithDim rows cols
+  = foldr (+) (M.matrix rows cols (const 0))
+
+{- Precond: forall m, n in mats: nrows m = nrows n and ncols m = nrcols n -}
+sumMatrices :: Num a => [M.Matrix a] -> M.Matrix a
+sumMatrices mats = let rows = M.nrows $ head mats in
+                   let cols = M.ncols $ head mats in
+                       sumMatricesWithDim rows cols mats
+
+excitations :: Bias -> Kernel -> Image -> M.Matrix Float
+excitations bias kernel image = sumMatrices $ convolveByChannel kernel image
