@@ -13,8 +13,8 @@ type ActivationDerivative = Float -> Float
 
 type Image = V.Vector RealMatrix
 
-data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int Int
-data DenseLayer = DenseLayer Activation ActivationDerivative RealMatrix BiasVector | SoftmaxLayer RealMatrix BiasVector
+data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int
+data DenseLayer = DenseLayer RealMatrix BiasVector Activation ActivationDerivative | SoftmaxLayer RealMatrix BiasVector
 
 type DenseNetwork = [ DenseLayer ]
 type ConvolutionalNetwork = [ TensorialLayer ]
@@ -66,16 +66,34 @@ sumMatrices mats = let rows = M.nrows $ V.head mats in
                    let cols = M.ncols $ V.head mats in
                        sumMatricesWithDim rows cols mats
 
-kernelExcitation :: Num a => V.Vector (M.Matrix a) -> a -> V.Vector (M.Matrix a) -> M.Matrix a
-kernelExcitation kernel bias image = (bias+) <$> sumMatrices (convolveByChannel kernel image)
+kernelExcitation :: Num a => V.Vector (M.Matrix a) -> V.Vector (M.Matrix a) -> a ->  M.Matrix a
+kernelExcitation image kernel bias = (bias+) <$> sumMatrices (convolveByChannel kernel image)
 
 convLayerExcitation :: Num a => V.Vector (V.Vector (M.Matrix a)) -> V.Vector a -> V.Vector (M.Matrix a) -> V.Vector (M.Matrix a)
-convLayerExcitation kernelTensor biasVector image = V.zipWith (\kernel bias -> kernelExcitation kernel bias image) kernelTensor biasVector
+convLayerExcitation kernelTensor biasVector image = V.zipWith (kernelExcitation image) kernelTensor biasVector
 
 tensorialExcitation :: TensorialLayer -> Image -> Image
 tensorialExcitation (ConvolutionalLayer kernelTensor biasVector _ _) = convLayerExcitation kernelTensor biasVector
 tensorialExcitation _ = error "Unimplemented!"
 
+tensorialActivation :: TensorialLayer -> Image -> Image
 tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) image = let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector act der) image in
                                                                                fmap (fmap act) excitationState
 tensorialActivation _ image = error "Unimplemented!"
+
+denseExcitation (DenseLayer mat bias _ _) x = let xColVector = M.colVector x in
+                                              let biasColVector = M.colVector bias in
+                                              M.getCol 1 $ mat * xColVector + biasColVector
+denseExcitation (SoftmaxLayer mat bias) x = let xColVector = M.colVector x in
+                                            let biasColVector = M.colVector bias in
+                                            M.getCol 1 $ mat * xColVector + biasColVector
+
+denseActivation :: DenseLayer -> V.Vector Float -> V.Vector Float
+denseActivation (DenseLayer mat bias act der) x = let excitation = denseExcitation (DenseLayer mat bias act der) x in
+                                                  fmap act excitation
+denseActivation (SoftmaxLayer mat bias) x = let excitation = denseExcitation (SoftmaxLayer mat bias) x in
+                                            softmax excitation
+
+softmax vector = let exps = fmap exp vector in
+                 let s = sum exps in
+                 fmap (/s) exps
