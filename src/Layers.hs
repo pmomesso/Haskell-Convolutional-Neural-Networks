@@ -17,9 +17,9 @@ data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation Acti
 data DenseLayer = DenseLayer RealMatrix BiasVector Activation ActivationDerivative | SoftmaxLayer RealMatrix BiasVector
 
 type DenseNetwork = [ DenseLayer ]
-type ConvolutionalNetwork = [ TensorialLayer ]
+type TensorialNetwork = [ TensorialLayer ]
 
-data NeuralNetwork = NeuralNetwork ConvolutionalNetwork DenseNetwork | JustDenseNetwork DenseNetwork
+data NeuralNetwork = ConvolutionalNetwork TensorialNetwork DenseNetwork
 
 windowIndices :: Int -> Int -> M.Matrix a -> [(Int, Int)]
 windowIndices numRows numCols rm = [(i, j) | i <- [1..(M.nrows rm - numRows + 1)], j <- [1..(M.ncols rm - numCols + 1)]]
@@ -100,6 +100,21 @@ softmax vector = let exps = fmap exp vector in
                  let s = sum exps in
                  fmap (/s) exps
 
+
+forwardConvNetwork :: TensorialNetwork -> Image -> Image
+forwardConvNetwork convNet image = foldl tensorialActivation' image convNet
+                                   where tensorialActivation' = flip tensorialActivation
+
 forwardDenseNetwork :: DenseNetwork -> V.Vector Float -> V.Vector Float
 forwardDenseNetwork denseNetwork x = foldl denseActivation' x denseNetwork
                                      where denseActivation' = flip denseActivation
+
+flatten :: M.Matrix a -> V.Vector a
+flatten mat = V.fromList $ M.toList mat
+
+flattenMatrices :: V.Vector (M.Matrix a) -> V.Vector a
+flattenMatrices mats = V.concat (V.toList $ V.map flatten mats)
+
+forwardNeuralNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let finalTensor = forwardConvNetwork tensorialNetwork image in
+                                                                                  let flattenedTensor = flattenMatrices finalTensor in
+                                                                                  forwardDenseNetwork denseNetwork flattenedTensor
