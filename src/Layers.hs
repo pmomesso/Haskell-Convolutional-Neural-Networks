@@ -13,7 +13,7 @@ type ActivationDerivative = Float -> Float
 
 type Image = V.Vector RealMatrix
 
-data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int
+data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int Int
 data DenseLayer = DenseLayer RealMatrix BiasVector Activation ActivationDerivative | SoftmaxLayer RealMatrix BiasVector
 
 type DenseNetwork = [ DenseLayer ]
@@ -77,9 +77,11 @@ tensorialExcitation (ConvolutionalLayer kernelTensor biasVector _ _) = convLayer
 tensorialExcitation _ = error "Unimplemented!"
 
 tensorialActivation :: TensorialLayer -> Image -> Image
-tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) image = let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector act der) image in
+tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) tensor = let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector act der) tensor in
                                                                                fmap (fmap act) excitationState
-tensorialActivation _ image = error "Unimplemented!"
+tensorialActivation (MaxPoolingLayer supportRows supportCols) tensor = let rows = M.nrows $ V.head tensor in 
+                                                                       let cols = M.ncols $ V.head tensor in
+                                                                       V.map (\channel -> M.matrix (rows `quot` supportRows) (cols `quot` supportCols) (\(row, col) -> maximum $ M.toList (M.submatrix (2*(row-1)+1) (2*row) (2*(col-1)+1) (2*col) channel))) tensor
 
 denseExcitation :: DenseLayer -> V.Vector Float -> V.Vector Float
 denseExcitation (DenseLayer mat bias _ _) x = let xColVector = M.colVector x in
@@ -115,6 +117,7 @@ flatten mat = V.fromList $ M.toList mat
 flattenMatrices :: V.Vector (M.Matrix a) -> V.Vector a
 flattenMatrices mats = V.concat (V.toList $ V.map flatten mats)
 
+forwardNeuralNetwork :: NeuralNetwork -> Image -> V.Vector Float
 forwardNeuralNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let finalTensor = forwardConvNetwork tensorialNetwork image in
                                                                                   let flattenedTensor = flattenMatrices finalTensor in
                                                                                   forwardDenseNetwork denseNetwork flattenedTensor
