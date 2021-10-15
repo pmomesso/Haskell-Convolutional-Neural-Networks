@@ -67,7 +67,7 @@ sumMatrices mats = let rows = M.nrows $ V.head mats in
                        sumMatricesWithDim rows cols mats
 
 kernelExcitation :: Num a => V.Vector (M.Matrix a) -> V.Vector (M.Matrix a) -> a ->  M.Matrix a
-kernelExcitation image kernel bias = (bias+) <$> sumMatrices (convolveByChannel kernel image)
+kernelExcitation image kernel bias = (bias+) <$> V.sum (convolveByChannel kernel image)
 
 convLayerExcitation :: Num a => V.Vector (V.Vector (M.Matrix a)) -> V.Vector a -> V.Vector (M.Matrix a) -> V.Vector (M.Matrix a)
 convLayerExcitation kernelTensor biasVector image = V.zipWith (kernelExcitation image) kernelTensor biasVector
