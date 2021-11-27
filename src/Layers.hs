@@ -160,8 +160,19 @@ diffKernel kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
 diffBiasSingleChannel dE_dH = sum $ M.toList dE_dH
 
 diffBias = V.map diffBiasSingleChannel
- 
+
+diffInputSingleChannel dE_dH kernel = let indices = [ (i, j) | i <- [1..(M.nrows dE_dH)], j <- [1..(M.ncols dE_dH)] ] in
+                                      let kRows = M.nrows kernel in
+                                      let kCols = M.ncols kernel in
+                                      let f mat (i, j) = setSubMatrix mat (M.submatrix i (i + kRows - 1) j (j + kCols - 1) mat + M.scaleMatrix (M.getElem i j dE_dH) kernel) i j in
+                                      foldl f (M.matrix (M.nrows dE_dH + kRows - 1) (M.ncols dE_dH + kCols - 1) (const 0)) indices
+
+diffInputMultiChannel :: RealMatrix -> Image -> Kernel
+diffInputMultiChannel dE_dH = fmap (diffInputSingleChannel dE_dH)
+
+diffInput :: Image -> KernelTensor -> KernelTensor
+diffInput = V.zipWith diffInputMultiChannel
 
 {- TODO -}
 -- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
--- backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl 
+-- backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl
