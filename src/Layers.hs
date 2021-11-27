@@ -135,12 +135,14 @@ indicatorFunction elem x = if x == elem then 1.0 else 0.0
 indicatorBlock :: Eq a => Int -> Int -> M.Matrix a -> M.Matrix a -> (Int, Int) -> M.Matrix Float
 indicatorBlock supportRows supportCols output mat (i, j) = fmap (indicatorFunction $ M.getElem i j output) (M.submatrix ((i - 1)*supportRows + 1) ((i - 1)*supportRows + supportRows) ((j - 1)*supportCols + 1) ((j - 1)*supportCols + supportCols) mat)
 
-backwardPoolingLayerSingleChannel :: TensorialLayer -> RealMatrix -> RealMatrix -> RealMatrix -> RealMatrix
-backwardPoolingLayerSingleChannel (MaxPoolingLayer supportRows supportCols) dE_dO output input =
+backwardPoolingLayerSingleChannel :: Int -> Int -> RealMatrix -> RealMatrix -> RealMatrix -> RealMatrix
+backwardPoolingLayerSingleChannel supportRows supportCols dE_dO output input =
                                                                         let blockIndices = [ (supportRows * (i-1) + 1, supportCols * (j-1) + 1) | i <- [1..(M.nrows dE_dO)], j <- [1..(M.ncols dE_dO)] ] in
                                                                         let f mat (i,j) = setSubMatrix mat (M.scaleMatrix (M.getElem ((i-1) `quot` supportRows + 1) ((j-1) `quot` supportCols + 1) dE_dO) (indicatorBlock supportRows supportCols output mat ((i-1) `quot` supportRows + 1, (j-1) `quot` supportCols + 1))) i j in
                                                                         foldl f input blockIndices
-backwardPoolingLayerSingleChannel layer _ _ _ = error "Unimplemented!"
+
+backwardPoolingLayerMultiChannel :: Int -> Int -> Image -> Image -> Image -> Image
+backwardPoolingLayerMultiChannel supportRows supportCols = V.zipWith3 (backwardPoolingLayerSingleChannel supportRows supportCols)
 
 {- TODO -}
 -- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
