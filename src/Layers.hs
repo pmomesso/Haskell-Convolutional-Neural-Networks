@@ -146,13 +146,18 @@ backwardPoolingLayerMultiChannel supportRows supportCols = V.zipWith3 (backwardP
 
 {- TODO: dE_dI, dE_dK, dE_dBias -}
 diffKernelSingleChannel :: Int -> Int -> RealMatrix -> RealMatrix -> RealMatrix
-diffKernelSingleChannel kRows kCols dE_dH input = 
+diffKernelSingleChannel kRows kCols dE_dH input =
                                                 let indices = [ (i,j) | i <- [1..(M.nrows dE_dH)], j <- [1..(M.ncols dE_dH)] ] in
                                                 let f dE_dK (i, j) = dE_dK + M.scaleMatrix (M.getElem i j dE_dH) (M.submatrix i (i + kRows - 1) j (j + kCols - 1) input) in
                                                 foldl f (M.matrix kRows kCols (const 0)) indices
 
-diffKernelMultiChannel :: Int -> Int -> RealMatrix -> Image -> RealMatrix
-diffKernelMultiChannel kRows kCols dE_dH inputs = V.sum $ fmap (diffKernelSingleChannel kRows kCols dE_dH) inputs
+diffKernelMultiChannel :: Int -> Int -> Image -> RealMatrix -> Kernel
+diffKernelMultiChannel kRows kCols inputs dE_dH = fmap (diffKernelSingleChannel kRows kCols dE_dH) inputs
+
+diffKernel :: Int -> Int -> Image -> Image -> KernelTensor
+diffKernel kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
+
+
 
 {- TODO -}
 -- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
