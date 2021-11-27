@@ -79,7 +79,7 @@ tensorialExcitation maxPoolingLayer = id
 tensorialActivation :: TensorialLayer -> Image -> Image
 tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) tensor = let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector act der) tensor in
                                                                                fmap (fmap act) excitationState
-tensorialActivation (MaxPoolingLayer supportRows supportCols) tensor = let rows = M.nrows $ V.head tensor in 
+tensorialActivation (MaxPoolingLayer supportRows supportCols) tensor = let rows = M.nrows $ V.head tensor in
                                                                        let cols = M.ncols $ V.head tensor in
                                                                        fmap (\channel -> M.matrix (rows `quot` supportRows) (cols `quot` supportCols) (\(row, col) -> maximum $ M.toList (M.submatrix (2*(row-1)+1) (2*row) (2*(col-1)+1) (2*col) channel))) tensor
 
@@ -136,9 +136,9 @@ indicatorBlock :: Eq a => Int -> Int -> M.Matrix a -> M.Matrix a -> (Int, Int) -
 indicatorBlock supportRows supportCols output mat (i, j) = fmap (indicatorFunction $ M.getElem i j output) (M.submatrix ((i - 1)*supportRows + 1) ((i - 1)*supportRows + supportRows) ((j - 1)*supportCols + 1) ((j - 1)*supportCols + supportCols) mat)
 
 backwardPoolingLayerSingleChannel :: TensorialLayer -> RealMatrix -> RealMatrix -> RealMatrix -> RealMatrix
-backwardPoolingLayerSingleChannel (MaxPoolingLayer supportRows supportCols) dE_dO output input = 
-                                                                        let blockIndices = [ (supportRows * i, supportCols * j) | i <- [1..(M.nrows dE_dO)], j <- [1..(M.ncols dE_dO)] ] in
-                                                                        let f mat (i,j) = setSubMatrix mat (M.scaleMatrix (M.getElem (i `quot` supportRows) (j `quot` supportCols) dE_dO) (indicatorBlock supportRows supportCols output mat (i, j))) i j in
+backwardPoolingLayerSingleChannel (MaxPoolingLayer supportRows supportCols) dE_dO output input =
+                                                                        let blockIndices = [ (supportRows * (i-1) + 1, supportCols * (j-1) + 1) | i <- [1..(M.nrows dE_dO)], j <- [1..(M.ncols dE_dO)] ] in
+                                                                        let f mat (i,j) = setSubMatrix mat (M.scaleMatrix (M.getElem ((i-1) `quot` supportRows + 1) ((j-1) `quot` supportCols + 1) dE_dO) (indicatorBlock supportRows supportCols output mat ((i-1) `quot` supportRows + 1, (j-1) `quot` supportCols + 1))) i j in
                                                                         foldl f input blockIndices
 backwardPoolingLayerSingleChannel layer _ _ _ = error "Unimplemented!"
 
