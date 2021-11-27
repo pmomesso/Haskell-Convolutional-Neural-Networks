@@ -157,6 +157,9 @@ diffKernelMultiChannel kRows kCols inputs dE_dH = fmap (diffKernelSingleChannel 
 diffKernel :: Int -> Int -> Image -> Image -> KernelTensor
 diffKernel kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
 
+diffBiasSingleChannel dE_dH = sum $ M.toList dE_dH
+
+diffBias = V.fmap diffBiasSingleChannel
 
 
 {- TODO -}
