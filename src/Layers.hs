@@ -144,6 +144,16 @@ backwardPoolingLayerSingleChannel supportRows supportCols dE_dO output input =
 backwardPoolingLayerMultiChannel :: Int -> Int -> Image -> Image -> Image -> Image
 backwardPoolingLayerMultiChannel supportRows supportCols = V.zipWith3 (backwardPoolingLayerSingleChannel supportRows supportCols)
 
+{- TODO: dE_dI, dE_dK, dE_dBias -}
+diffKernelSingleChannel :: Int -> Int -> RealMatrix -> RealMatrix -> RealMatrix
+diffKernelSingleChannel kRows kCols dE_dH input = 
+                                                let indices = [ (i,j) | i <- [1..(M.nrows dE_dH)], j <- [1..(M.ncols dE_dH)] ] in
+                                                let f dE_dK (i, j) = dE_dK + M.scaleMatrix (M.getElem i j dE_dH) (M.submatrix i (i + kRows - 1) j (j + kCols - 1) input) in
+                                                foldl f (M.matrix kRows kCols (const 0)) indices
+
+diffKernelMultiChannel :: Int -> Int -> RealMatrix -> Image -> RealMatrix
+diffKernelMultiChannel kRows kCols dE_dH inputs = V.sum $ fmap (diffKernelSingleChannel kRows kCols dE_dH) inputs
+
 {- TODO -}
 -- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
 -- backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl 
