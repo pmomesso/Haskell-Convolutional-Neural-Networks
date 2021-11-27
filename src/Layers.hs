@@ -74,14 +74,14 @@ convLayerExcitation kernelTensor biasVector image = V.zipWith (kernelExcitation 
 
 tensorialExcitation :: TensorialLayer -> Image -> Image
 tensorialExcitation (ConvolutionalLayer kernelTensor biasVector _ _) = convLayerExcitation kernelTensor biasVector
-tensorialExcitation _ = error "Unimplemented!"
+tensorialExcitation maxPoolingLayer = id
 
 tensorialActivation :: TensorialLayer -> Image -> Image
 tensorialActivation (ConvolutionalLayer kernelTensor biasVector act der) tensor = let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector act der) tensor in
                                                                                fmap (fmap act) excitationState
 tensorialActivation (MaxPoolingLayer supportRows supportCols) tensor = let rows = M.nrows $ V.head tensor in 
                                                                        let cols = M.ncols $ V.head tensor in
-                                                                       V.map (\channel -> M.matrix (rows `quot` supportRows) (cols `quot` supportCols) (\(row, col) -> maximum $ M.toList (M.submatrix (2*(row-1)+1) (2*row) (2*(col-1)+1) (2*col) channel))) tensor
+                                                                       fmap (\channel -> M.matrix (rows `quot` supportRows) (cols `quot` supportCols) (\(row, col) -> maximum $ M.toList (M.submatrix (2*(row-1)+1) (2*row) (2*(col-1)+1) (2*col) channel))) tensor
 
 denseExcitation :: DenseLayer -> V.Vector Float -> V.Vector Float
 denseExcitation (DenseLayer mat bias _ _) x = let xColVector = M.colVector x in
@@ -115,9 +115,25 @@ flatten :: M.Matrix a -> V.Vector a
 flatten mat = V.fromList $ M.toList mat
 
 flattenMatrices :: V.Vector (M.Matrix a) -> V.Vector a
-flattenMatrices mats = V.concat (V.toList $ V.map flatten mats)
+flattenMatrices mats = V.concat (V.toList $ fmap flatten mats)
 
 forwardNeuralNetwork :: NeuralNetwork -> Image -> V.Vector Float
 forwardNeuralNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let finalTensor = forwardConvNetwork tensorialNetwork image in
                                                                                   let flattenedTensor = flattenMatrices finalTensor in
                                                                                   forwardDenseNetwork denseNetwork flattenedTensor
+
+setSubMatrix :: M.Matrix a -> M.Matrix a -> Int -> Int -> M.Matrix a
+setSubMatrix target block i j = let dRows = M.nrows block in
+                                let dCols = M.ncols block in
+                                let indices = [ (i', j') | i' <- [1..dRows], j' <- [1..dCols] ] in
+                                let f mat (row, col) = M.setElem (M.getElem row col block) (row + i - 1, col + j - 1) mat in
+                                foldl f target indices
+
+-- backwardPoolingLayerSingleChannel :: TensorialLayer -> RealMatrix -> RealMatrix -> RealMatrix
+-- backwardPoolingLayerSingleChannel (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl f input blockIndices
+--                                                                                           where f mat (i, j) = mat
+--                                                                                                 blockIndices = [ (supportRows * i, supportCols * j) | i <- [1..(M.nrows dE_dO)], j <- [1..(M.ncols dE_dO)] ]
+
+{- TODO -}
+-- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
+-- backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl 
