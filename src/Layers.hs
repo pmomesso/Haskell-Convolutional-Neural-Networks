@@ -129,10 +129,18 @@ setSubMatrix target block i j = let dRows = M.nrows block in
                                 let f mat (row, col) = M.setElem (M.getElem row col block) (row + i - 1, col + j - 1) mat in
                                 foldl f target indices
 
--- backwardPoolingLayerSingleChannel :: TensorialLayer -> RealMatrix -> RealMatrix -> RealMatrix
--- backwardPoolingLayerSingleChannel (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl f input blockIndices
---                                                                                           where f mat (i, j) = mat
---                                                                                                 blockIndices = [ (supportRows * i, supportCols * j) | i <- [1..(M.nrows dE_dO)], j <- [1..(M.ncols dE_dO)] ]
+indicatorFunction :: Eq a => a -> a -> Float
+indicatorFunction elem x = if x == elem then 1.0 else 0.0
+
+indicatorBlock :: Eq a => Int -> Int -> M.Matrix a -> M.Matrix a -> (Int, Int) -> M.Matrix Float
+indicatorBlock supportRows supportCols output mat (i, j) = fmap (indicatorFunction $ M.getElem i j output) (M.submatrix ((i - 1)*supportRows + 1) ((i - 1)*supportRows + supportRows) ((j - 1)*supportCols + 1) ((j - 1)*supportCols + supportCols) mat)
+
+backwardPoolingLayerSingleChannel :: TensorialLayer -> RealMatrix -> RealMatrix -> RealMatrix -> RealMatrix
+backwardPoolingLayerSingleChannel (MaxPoolingLayer supportRows supportCols) dE_dO output input = 
+                                                                        let blockIndices = [ (supportRows * i, supportCols * j) | i <- [1..(M.nrows dE_dO)], j <- [1..(M.ncols dE_dO)] ] in
+                                                                        let f mat (i,j) = setSubMatrix mat (M.scaleMatrix (M.getElem (i `quot` supportRows) (j `quot` supportCols) dE_dO) (indicatorBlock supportRows supportCols output mat (i, j))) i j in
+                                                                        foldl f input blockIndices
+backwardPoolingLayerSingleChannel layer _ _ _ = error "Unimplemented!"
 
 {- TODO -}
 -- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
