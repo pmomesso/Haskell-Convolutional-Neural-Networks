@@ -174,8 +174,10 @@ diffInput :: Image -> KernelTensor -> KernelTensor
 diffInput = V.zipWith diffInputMultiChannel
 
 {- TODO: dE_dH functions for tensorial layers -}
+deltasConvSingleChannel :: (Float -> Float) -> RealMatrix -> RealMatrix -> RealMatrix
 deltasConvSingleChannel activationDerivative excitationChannel = elemwiseMult (fmap activationDerivative excitationChannel)
 
+deltasConvMultiChannel :: (Float -> Float) -> Image -> Image -> Image
 deltasConvMultiChannel activationDerivative = V.zipWith (deltasConvSingleChannel activationDerivative)
 
 {- TODO -}
