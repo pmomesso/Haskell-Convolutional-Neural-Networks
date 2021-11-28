@@ -173,6 +173,11 @@ diffInputMultiChannel dE_dH = fmap (diffInputSingleChannel dE_dH)
 diffInput :: Image -> KernelTensor -> KernelTensor
 diffInput = V.zipWith diffInputMultiChannel
 
+{- TODO: dE_dH functions for tensorial layers -}
+deltasConvSingleChannel activationDerivative excitationChannel = elemwiseMult (fmap activationDerivative excitationChannel)
+
+deltasConvMultiChannel activationDerivative = V.zipWith (deltasConvSingleChannel activationDerivative)
+
 {- TODO -}
 -- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
 -- backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl
