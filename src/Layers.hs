@@ -223,10 +223,18 @@ forwardDenseLayer (SoftmaxLayer weights bias) inputs = let excitationState = den
                                                   let activationState = denseActivation (SoftmaxLayer weights bias) inputs in
                                                   (SoftmaxLayerState inputs excitationState, activationState)
 
-forwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs = 
+forwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs =
                                                 let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs in
                                                 let activationState = tensorialActivation (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs in
                                                 (ConvolutionalLayerState inputs excitationState, activationState)
 forwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputs =
                                                 let activation = tensorialActivation (MaxPoolingLayer supportRows supportCols) inputs in
                                                 (MaxPoolingLayerState inputs activation, activation)
+
+forwardTensorialNetworkWithStates tensorialNetwork = scanl f
+                          where f prevLayerState tensorialLayer = let prevActivation = snd prevLayerState in
+                                                                  forwardTensorialLayer tensorialLayer prevActivation
+
+forwardDenseNetworkWithState denseNetwork input = scanl f
+                          where f prevLayerState denseLayer = let prevActivation = snd prevLayerState in
+                                                              forwardDenseLayer denseLayer prevActivation
