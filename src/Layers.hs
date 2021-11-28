@@ -3,6 +3,8 @@ module Layers where
 import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
+import Data.Bifunctor ( Bifunctor(second) )
+
 type RealMatrix = M.Matrix Float
 type Kernel = V.Vector (M.Matrix Float)
 type KernelTensor = V.Vector Kernel
@@ -214,7 +216,8 @@ backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
                                                                       let deltasColVector = M.colVector $ softmaxDeltas excitationVec dE_dO in
                                                                       M.transpose weights * deltasColVector
 
-data LayerState = MaxPoolingLayerState Image Image | ConvolutionalLayerState Image Image | DenseLayerState (V.Vector Float) (V.Vector Float) | SoftmaxLayerState (V.Vector Float) (V.Vector Float)
+data LayerState = MaxPoolingLayerState Image Image | ConvolutionalLayerState Image Image | DenseLayerState (V.Vector Float) (V.Vector Float) | SoftmaxLayerState (V.Vector Float) (V.Vector Float) | EmptyState
+data LayerOutput = ImageOutput Image | VectorOutput (V.Vector Float)
 
 forwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputs = let excitationState = denseExcitation (DenseLayer weights bias activation activationDerivative) inputs in
                                                                                 let activationState = denseActivation (DenseLayer weights bias activation activationDerivative) inputs in
@@ -231,10 +234,17 @@ forwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputs =
                                                 let activation = tensorialActivation (MaxPoolingLayer supportRows supportCols) inputs in
                                                 (MaxPoolingLayerState inputs activation, activation)
 
-forwardTensorialNetworkWithStates tensorialNetwork = scanl f
+forwardTensorialNetworkWithStates :: TensorialNetwork -> Image -> [(LayerState, Image)]
+forwardTensorialNetworkWithStates tensorialNetwork image = scanl f (EmptyState, image) tensorialNetwork
                           where f prevLayerState tensorialLayer = let prevActivation = snd prevLayerState in
                                                                   forwardTensorialLayer tensorialLayer prevActivation
 
-forwardDenseNetworkWithState denseNetwork input = scanl f
+forwardDenseNetworkWithState :: DenseNetwork -> V.Vector Float -> [(LayerState, V.Vector Float)]
+forwardDenseNetworkWithState denseNetwork input = scanl f (EmptyState, input) denseNetwork
                           where f prevLayerState denseLayer = let prevActivation = snd prevLayerState in
                                                               forwardDenseLayer denseLayer prevActivation
+
+forwardNetworkWithState (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let tensorialStates = forwardTensorialNetworkWithStates tensorialNetwork image in
+                                                                                      let tensorAsVector = (flattenMatrices . snd . last) tensorialStates in
+                                                                                      let denseStates = forwardDenseNetworkWithState denseNetwork tensorAsVector in
+                                                                                      fmap (second ImageOutput) tensorialStates ++ fmap (second VectorOutput) denseStates
