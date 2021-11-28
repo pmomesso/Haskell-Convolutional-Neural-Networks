@@ -195,7 +195,7 @@ backwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation ac
                                                                                       diffInput deltas kernelTensor
 
 {- TODO: dE_dH, dE_dW, dE_dB, dE_dI functions for dense layers -}
-softmaxDeltaTerms exps s dE_dO termIndex index = if termIndex == index 
+softmaxDeltaTerms exps s dE_dO termIndex index = if termIndex == index
                                                  then ((exps V.! termIndex)*s - (exps V.! termIndex)^2)/s^2
                                                  else -(exps V.! termIndex)*(exps V.! index)/s^2
 
@@ -213,3 +213,20 @@ backwardDenseLayer (DenseLayer weights bias activation activationDerivative) inp
 backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
                                                                       let deltasColVector = M.colVector $ softmaxDeltas excitationVec dE_dO in
                                                                       M.transpose weights * deltasColVector
+
+data LayerState = MaxPoolingLayerState Image Image | ConvolutionalLayerState Image Image | DenseLayerState (V.Vector Float) (V.Vector Float) | SoftmaxLayerState (V.Vector Float) (V.Vector Float)
+
+forwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputs = let excitationState = denseExcitation (DenseLayer weights bias activation activationDerivative) inputs in
+                                                                                let activationState = denseActivation (DenseLayer weights bias activation activationDerivative) inputs in
+                                                                                (DenseLayerState inputs excitationState, activationState)
+forwardDenseLayer (SoftmaxLayer weights bias) inputs = let excitationState = denseExcitation (SoftmaxLayer weights bias) inputs in
+                                                  let activationState = denseActivation (SoftmaxLayer weights bias) inputs in
+                                                  (SoftmaxLayerState inputs excitationState, activationState)
+
+forwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs = 
+                                                let excitationState = tensorialExcitation (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs in
+                                                let activationState = tensorialActivation (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputs in
+                                                (ConvolutionalLayerState inputs excitationState, activationState)
+forwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputs =
+                                                let activation = tensorialActivation (MaxPoolingLayer supportRows supportCols) inputs in
+                                                (MaxPoolingLayerState inputs activation, activation)
