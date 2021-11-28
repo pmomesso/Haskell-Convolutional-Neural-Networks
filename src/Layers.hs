@@ -21,6 +21,11 @@ type TensorialNetwork = [ TensorialLayer ]
 
 data NeuralNetwork = ConvolutionalNetwork TensorialNetwork DenseNetwork
 
+{- TODO: declare instance of Image for summing -}
+
+instance Num a => Num (V.Vector a) where
+  (+) = V.zipWith (+)
+
 windowIndices :: Int -> Int -> M.Matrix a -> [(Int, Int)]
 windowIndices numRows numCols rm = [(i, j) | i <- [1..(M.nrows rm - numRows + 1)], j <- [1..(M.ncols rm - numCols + 1)]]
 
@@ -161,17 +166,19 @@ diffBiasSingleChannel dE_dH = sum $ M.toList dE_dH
 
 diffBias = V.map diffBiasSingleChannel
 
+diffInputSingleChannel :: RealMatrix -> RealMatrix -> RealMatrix
 diffInputSingleChannel dE_dH kernel = let indices = [ (i, j) | i <- [1..(M.nrows dE_dH)], j <- [1..(M.ncols dE_dH)] ] in
                                       let kRows = M.nrows kernel in
                                       let kCols = M.ncols kernel in
                                       let f mat (i, j) = setSubMatrix mat (M.submatrix i (i + kRows - 1) j (j + kCols - 1) mat + M.scaleMatrix (M.getElem i j dE_dH) kernel) i j in
                                       foldl f (M.matrix (M.nrows dE_dH + kRows - 1) (M.ncols dE_dH + kCols - 1) (const 0)) indices
 
-diffInputMultiChannel :: RealMatrix -> Image -> Kernel
+diffInputMultiChannel :: RealMatrix -> Kernel -> Image
 diffInputMultiChannel dE_dH = fmap (diffInputSingleChannel dE_dH)
 
-diffInput :: Image -> KernelTensor -> KernelTensor
-diffInput = V.zipWith diffInputMultiChannel
+{- TODO: fix semantics. Should sum accross multiple channels of the resulting dE_dI's -}
+diffInput :: Image -> KernelTensor -> Image
+diffInput dE_dHChannels kernelTensor = V.sum (V.zipWith diffInputMultiChannel dE_dHChannels kernelTensor)
 
 {- TODO: dE_dH functions for tensorial layers -}
 deltasConvSingleChannel :: (Float -> Float) -> RealMatrix -> RealMatrix -> RealMatrix
@@ -181,5 +188,8 @@ deltasConvMultiChannel :: (Float -> Float) -> Image -> Image -> Image
 deltasConvMultiChannel activationDerivative = V.zipWith (deltasConvSingleChannel activationDerivative)
 
 {- TODO -}
--- backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image
--- backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) dE_dO input = foldl
+backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image -> Image
+backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputChannels outputChannels dE_dOChannels = backwardPoolingLayerMultiChannel supportRows supportCols dE_dOChannels outputChannels inputChannels
+backwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputChannels excitationChannels dE_dOChannels = 
+                                                                                      let deltas = deltasConvMultiChannel activationDerivative excitationChannels dE_dOChannels in
+                                                                                      diffInput deltas kernelTensor

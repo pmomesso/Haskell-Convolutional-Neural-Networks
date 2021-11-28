@@ -9,6 +9,9 @@ matrix1 = M.matrix 6 6 (\(i, j) -> fromIntegral(i + j)::Float)
 matrix2 = M.setElem 100.0 (2,1) matrix1
 ones_6x6 = M.matrix 6 6 (const (1::Float))
 
+m1 = V.fromList [matrix1]
+m2 = V.fromList [matrix2]
+
 singleChannelKernel_3x3 = M.matrix 3 3 (const (1::Float))
 
 poolingLayer = MaxPoolingLayer 2 2
