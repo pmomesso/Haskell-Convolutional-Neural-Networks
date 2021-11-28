@@ -190,6 +190,26 @@ deltasConvMultiChannel activationDerivative = V.zipWith (deltasConvSingleChannel
 {- TODO -}
 backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image -> Image
 backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputChannels outputChannels dE_dOChannels = backwardPoolingLayerMultiChannel supportRows supportCols dE_dOChannels outputChannels inputChannels
-backwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputChannels excitationChannels dE_dOChannels = 
+backwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputChannels excitationChannels dE_dOChannels =
                                                                                       let deltas = deltasConvMultiChannel activationDerivative excitationChannels dE_dOChannels in
                                                                                       diffInput deltas kernelTensor
+
+{- TODO: dE_dH, dE_dW, dE_dB, dE_dI functions for dense layers -}
+softmaxDeltaTerms exps s dE_dO termIndex index = if termIndex == index 
+                                                 then ((exps V.! termIndex)*s - (exps V.! termIndex)^2)/s^2
+                                                 else -(exps V.! termIndex)*(exps V.! index)/s^2
+
+softmaxDeltaTerm exps s dE_dO termIndex = sum $ map (softmaxDeltaTerms exps s dE_dO termIndex) [1..(V.length exps)]
+
+softmaxDeltas excitationVec dE_dO = let exps = fmap exp excitationVec in
+                                    let s = sum exps in
+                                    V.generate (V.length excitationVec) (softmaxDeltaTerm exps s dE_dO)
+
+backwardDenseLayer :: DenseLayer -> V.Vector Float -> V.Vector Float -> V.Vector Float -> RealMatrix
+backwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputVector excitationVec dE_dO =
+                                                                                      let deltas = elemwiseMult (M.colVector dE_dO) (activationDerivative <$> M.colVector excitationVec) in
+                                                                                      M.transpose weights * deltas
+
+backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
+                                                                      let deltas = M.colVector $ softmaxDeltas excitationVec dE_dO in
+                                                                      M.transpose weights * deltas
