@@ -207,9 +207,9 @@ softmaxDeltas excitationVec dE_dO = let exps = fmap exp excitationVec in
 
 backwardDenseLayer :: DenseLayer -> V.Vector Float -> V.Vector Float -> V.Vector Float -> RealMatrix
 backwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputVector excitationVec dE_dO =
-                                                                                      let deltas = elemwiseMult (M.colVector dE_dO) (activationDerivative <$> M.colVector excitationVec) in
-                                                                                      M.transpose weights * deltas
+                                                                                      let deltasColVector = elemwiseMult (M.colVector dE_dO) (activationDerivative <$> M.colVector excitationVec) in
+                                                                                      M.transpose weights * deltasColVector
 
 backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
-                                                                      let deltas = M.colVector $ softmaxDeltas excitationVec dE_dO in
-                                                                      M.transpose weights * deltas
+                                                                      let deltasColVector = M.colVector $ softmaxDeltas excitationVec dE_dO in
+                                                                      M.transpose weights * deltasColVector
