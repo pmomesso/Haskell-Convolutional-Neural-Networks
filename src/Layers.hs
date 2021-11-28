@@ -154,8 +154,8 @@ diffKernelSingleChannel kRows kCols dE_dH input =
 diffKernelMultiChannel :: Int -> Int -> Image -> RealMatrix -> Kernel
 diffKernelMultiChannel kRows kCols inputs dE_dH = fmap (diffKernelSingleChannel kRows kCols dE_dH) inputs
 
-diffKernel :: Int -> Int -> Image -> Image -> KernelTensor
-diffKernel kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
+diffKernelTensor :: Int -> Int -> Image -> Image -> KernelTensor
+diffKernelTensor kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
 
 diffBiasSingleChannel dE_dH = sum $ M.toList dE_dH
 
