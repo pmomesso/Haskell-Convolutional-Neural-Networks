@@ -165,8 +165,10 @@ diffKernelMultiChannel kRows kCols inputs dE_dH = fmap (diffKernelSingleChannel 
 diffKernelTensor :: Int -> Int -> Image -> Image -> KernelTensor
 diffKernelTensor kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
 
+diffKernelBiasSingleChannel :: RealMatrix -> Float
 diffKernelBiasSingleChannel dE_dH = sum $ M.toList dE_dH
 
+diffKernelBias :: V.Vector (M.Matrix Float) -> V.Vector Float
 diffKernelBias = V.map diffKernelBiasSingleChannel
 
 diffInputSingleChannel :: RealMatrix -> RealMatrix -> RealMatrix
@@ -315,9 +317,44 @@ extractLayerExcitation :: LayerState -> Image
 extractLayerExcitation (ConvolutionalLayerState _ exc) = exc
 extractLayerExcitation _ = error "not implemented"
 
+backpropagationNetwork :: NeuralNetwork -> [LayerState] -> [LayerState] -> V.Vector Float -> ([BackpropagationResult], [BackpropagationResult])
 backpropagationNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialLayerStates denseLayerStates dE_dO =
                                                                                         let denseBPResults = backwardDenseNetwork denseNetwork denseLayerStates dE_dO in
                                                                                         let (DenseLayerBPResult dE_dI _) = last denseBPResults in
                                                                                         let next_dE_dO = deflattenToSameDimensionsOf (extractLayerExcitation $ last tensorialLayerStates) dE_dI in
                                                                                         let tensorialBPResults = backwardTensorialNetwork tensorialNetwork tensorialLayerStates next_dE_dO in
-                                                                                        tensorialBPResults ++ denseBPResults
+                                                                                        (tensorialBPResults, denseBPResults)
+
+{- TODO: dE_dW on whole networks -}
+-- data GradientAction = NoAction | ConvolutionalLayerAction Image (V.Vector Float) | DenseLayerAction RealMatrix (V.Vector Float) 
+
+diffTensorialLayer :: TensorialLayer -> Image -> Image -> KernelTensor
+diffTensorialLayer (ConvolutionalLayer kernelTensor _ _ _) input deltas = diffKernelTensor (M.nrows $ (V.head . V.head) kernelTensor) (M.ncols $ (V.head . V.head) kernelTensor) input deltas
+diffTensorialLayer MaxPoolingLayer {} input deltas = V.empty
+
+diffBiasTensorialLayer :: TensorialLayer -> V.Vector (M.Matrix Float) -> V.Vector Float
+diffBiasTensorialLayer ConvolutionalLayer {} deltas = diffKernelBias deltas
+diffBiasTensorialLayer MaxPoolingLayer {} deltas = V.empty
+
+diffDenseLayer2 :: DenseLayer -> V.Vector Float -> V.Vector Float -> RealMatrix
+diffDenseLayer2 DenseLayer {} input delta = diffDenseLayer input delta
+diffDenseLayer2 SoftmaxLayer {} input delta = diffDenseLayer input delta
+
+diffDenseBias2 :: DenseLayer -> V.Vector Float -> RealMatrix
+diffDenseBias2 DenseLayer {} delta = diffDenseBias delta
+diffDenseBias2 SoftmaxLayer {} delta = diffDenseBias delta
+
+diffDenseLayerWithState :: DenseLayer -> LayerState -> BackpropagationResult -> (RealMatrix, RealMatrix)
+diffDenseLayerWithState denseLayer (DenseLayerState input _) (DenseLayerBPResult _ dE_dH) = (diffDenseLayer2 denseLayer input dE_dH, diffDenseBias2 denseLayer dE_dH)
+diffDenseLayerWithState _ _ _ = error "Bad pairing of layer state and input"
+
+diffTensorialLayerWithState :: TensorialLayer -> LayerState -> BackpropagationResult -> (KernelTensor, V.Vector Float)
+diffTensorialLayerWithState tensorialLayer (ConvolutionalLayerState input _) (TensorialLayerBPResult _ dE_dH) = (diffTensorialLayer tensorialLayer input dE_dH, diffBiasTensorialLayer tensorialLayer dE_dH)
+diffTensorialLayerWithState tensorialLayer (MaxPoolingLayerState input _) (TensorialLayerBPResult _ dE_dH) = (diffTensorialLayer tensorialLayer input dE_dH, diffBiasTensorialLayer tensorialLayer dE_dH)
+diffTensorialLayerWithState _ _ _ = error "Bad pairing of layer state and input"
+
+diffNetwork :: NeuralNetwork -> [LayerState] -> [LayerState] -> [BackpropagationResult] -> [BackpropagationResult] -> ([(KernelTensor, V.Vector Float)], [(RealMatrix, RealMatrix)])
+diffNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialLayerStates denseLayerStates tensorialBPResults denseBPResults =
+                                                                                                            let tensorialLayerDiffs = zipWith3 diffTensorialLayerWithState tensorialNetwork tensorialLayerStates tensorialBPResults  in
+                                                                                                            let denseLayerDiffs = zipWith3 diffDenseLayerWithState denseNetwork denseLayerStates denseBPResults in
+                                                                                                            (tensorialLayerDiffs, denseLayerDiffs)
