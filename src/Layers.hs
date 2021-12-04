@@ -22,6 +22,7 @@ type DenseNetwork = [ DenseLayer ]
 type TensorialNetwork = [ TensorialLayer ]
 
 data NeuralNetwork = ConvolutionalNetwork TensorialNetwork DenseNetwork
+data Layer = TTensorialLayer TensorialLayer | TDenseLayer DenseLayer
 
 {- TODO: declare instance of Image for summing -}
 
@@ -250,7 +251,7 @@ forwardDenseNetworkWithState denseNetwork input = scanl f (EmptyState, input) de
 forwardNetworkWithState (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let tensorialStates = forwardTensorialNetworkWithStates tensorialNetwork image in
                                                                                       let tensorAsVector = (flattenMatrices . snd . last) tensorialStates in
                                                                                       let denseStates = forwardDenseNetworkWithState denseNetwork tensorAsVector in
-                                                                                      fmap (second ImageOutput) tensorialStates ++ fmap (second VectorOutput) denseStates
+                                                                                      (fmap (second ImageOutput) tensorialStates, fmap (second VectorOutput) denseStates)
 
 data BackpropagationResult = EmptyBPResultDense (V.Vector Float) | EmptyBPResultTensorial Image | DenseLayerBPResult (V.Vector Float) (V.Vector Float) | TensorialLayerBPResult Image Image
 
@@ -262,7 +263,7 @@ backwardDenseNetwork denseNetwork layerStates dE_dO = let layersPairedWithStates
                                                       scanr backpropagationStepDense (EmptyBPResultDense dE_dO) layersPairedWithStates
 
 backpropagationStepDense :: (DenseLayer, LayerState) -> BackpropagationResult -> BackpropagationResult
-backpropagationStepDense (denseLayer, denseLayerState) (DenseLayerBPResult curr_dE_dO _) = 
+backpropagationStepDense (denseLayer, denseLayerState) (DenseLayerBPResult curr_dE_dO _) =
                                                                 case denseLayerState of
                                                                 DenseLayerState input exc -> let (dE_dI, dE_dH) = backwardDenseLayer denseLayer input exc curr_dE_dO in
                                                                                              DenseLayerBPResult (toVector dE_dI) dE_dH
@@ -289,3 +290,27 @@ backpropagationStepTensorial (tensorialLayer, tensorialLayerState) (TensorialLay
 backpropagationStepTensorial _ _ = error "Bad pairing of layer with state"
 
 {- TODO: backward network -}
+partitionInRec :: Int -> [a] -> [[a]]
+partitionInRec perPartition [] = []
+partitionInRec perPartition list = take perPartition list : partitionInRec perPartition (drop perPartition list)
+
+partitionIn :: Int -> [a] -> [[a]]
+partitionIn n list = let numValues = length list in
+                     let perPartition = numValues `quot` n in
+                     partitionInRec perPartition list
+
+deflattenToSameDimensionsOf :: Image -> V.Vector Float -> Image
+deflattenToSameDimensionsOf image vector = let asLists = partitionIn (V.length image) (V.toList vector) in
+                                           let rows = M.nrows $ V.head image in
+                                           let cols = M.ncols $ V.head image in
+                                           V.fromList $ fmap (M.fromList rows cols) asLists
+
+backpropagationNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialLayerStates denseLayerStates dE_dO =
+                                                                                        let denseBPResults = backwardDenseNetwork denseNetwork denseLayerStates dE_dO in
+                                                                                        let (DenseLayerBPResult dE_dI _) = last denseBPResults in
+                                                                                        let next_dE_dO = deflattenToSameDimensionsOf (extractLayerExcitation $ last tensorialLayerStates) dE_dI in
+                                                                                        let tensorialBPResults = backwardTensorialNetwork tensorialNetwork tensorialLayerStates next_dE_dO in
+                                                                                        tensorialBPResults ++ denseBPResults
+extractLayerExcitation :: LayerState -> Image
+extractLayerExcitation (ConvolutionalLayerState _ exc) = exc
+extractLayerExcitation _ = error "not implemented"
