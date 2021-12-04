@@ -229,7 +229,6 @@ diffDenseBias :: V.Vector a -> M.Matrix a
 diffDenseBias = M.colVector
 
 data LayerState = MaxPoolingLayerState Image Image | ConvolutionalLayerState Image Image | DenseLayerState (V.Vector Float) (V.Vector Float) | SoftmaxLayerState (V.Vector Float) (V.Vector Float) | EmptyState
-data LayerOutput = ImageOutput Image | VectorOutput (V.Vector Float)
 
 forwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputs = let excitationState = denseExcitation (DenseLayer weights bias activation activationDerivative) inputs in
                                                                                 let activationState = denseActivation (DenseLayer weights bias activation activationDerivative) inputs in
@@ -256,10 +255,11 @@ forwardDenseNetworkWithState denseNetwork input = scanl f (EmptyState, input) de
                           where f prevLayerState denseLayer = let prevActivation = snd prevLayerState in
                                                               forwardDenseLayer denseLayer prevActivation
 
+forwardNetworkWithState :: NeuralNetwork -> V.Vector RealMatrix -> ([LayerState], [LayerState])
 forwardNetworkWithState (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let tensorialStates = forwardTensorialNetworkWithStates tensorialNetwork image in
                                                                                       let tensorAsVector = (flattenMatrices . snd . last) tensorialStates in
                                                                                       let denseStates = forwardDenseNetworkWithState denseNetwork tensorAsVector in
-                                                                                      (fmap (second ImageOutput) tensorialStates, fmap (second VectorOutput) denseStates)
+                                                                                      (fmap fst tensorialStates, fmap fst denseStates)
 
 data BackpropagationResult = EmptyBPResultDense (V.Vector Float) | EmptyBPResultTensorial Image | DenseLayerBPResult (V.Vector Float) (V.Vector Float) | TensorialLayerBPResult Image Image
 
@@ -358,3 +358,47 @@ diffNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialLayerS
                                                                                                             let tensorialLayerDiffs = zipWith3 diffTensorialLayerWithState tensorialNetwork tensorialLayerStates tensorialBPResults  in
                                                                                                             let denseLayerDiffs = zipWith3 diffDenseLayerWithState denseNetwork denseLayerStates denseBPResults in
                                                                                                             (tensorialLayerDiffs, denseLayerDiffs)
+
+data GradientAction = TensorialLayerAction KernelTensor (V.Vector Float) | DenseLayerAction RealMatrix RealMatrix
+
+scaleKernelTensor :: Float -> KernelTensor -> KernelTensor
+scaleKernelTensor eta = fmap (fmap $ M.scaleMatrix eta)
+
+sumKernelTensors :: KernelTensor -> KernelTensor -> KernelTensor
+sumKernelTensors = V.zipWith (V.zipWith (+))
+
+scaleVector :: Float -> V.Vector Float -> V.Vector Float
+scaleVector eta = fmap (*eta)
+
+scaleTensorialActions :: Float -> ([KernelTensor], [V.Vector Float]) -> ([KernelTensor], [V.Vector Float])
+scaleTensorialActions eta (dE_dKList, dE_dBList) = (fmap (scaleKernelTensor eta) dE_dKList , fmap (scaleVector eta) dE_dBList)
+
+applyPair f (x, y) = (f x, f y)
+
+scaleDenseActions :: Float -> ([RealMatrix], [RealMatrix]) -> ([RealMatrix], [RealMatrix])
+scaleDenseActions eta = applyPair (fmap $ M.scaleMatrix eta)
+
+toTensorialActions :: Float -> ([KernelTensor], [V.Vector Float]) -> [GradientAction]
+toTensorialActions eta (dE_dKList, dE_dBList) = let (dE_dKList', dE_dBList') = scaleTensorialActions eta (dE_dKList, dE_dBList) in
+                                            zipWith TensorialLayerAction dE_dKList' dE_dBList'
+toDenseActions :: Float -> ([RealMatrix], [RealMatrix]) -> [GradientAction]
+toDenseActions eta (dE_dWList, dE_dBList) = let (dE_dWList', dE_dBList') = scaleDenseActions eta (dE_dWList, dE_dBList) in
+                                            zipWith DenseLayerAction dE_dWList' dE_dBList'
+
+sumTensors :: KernelTensor -> KernelTensor -> KernelTensor
+sumTensors = V.zipWith (V.zipWith (+))
+
+applyDenseAction :: DenseLayer -> GradientAction -> DenseLayer
+applyDenseAction (DenseLayer weights bias act der) (DenseLayerAction dW dB) = DenseLayer (weights + dW) (bias + toVector dB) act der
+applyDenseAction (SoftmaxLayer weights bias) (DenseLayerAction dW dB) = SoftmaxLayer (weights + dW) (bias + toVector dB)
+applyDenseAction layer _ = error "Bad layer action pairing"
+
+applyTensorialAction :: TensorialLayer -> GradientAction -> TensorialLayer
+applyTensorialAction (ConvolutionalLayer kernelTensor biasVector act der) (TensorialLayerAction dK dB) = ConvolutionalLayer (sumTensors kernelTensor dK) (biasVector + dB) act der
+applyTensorialAction (MaxPoolingLayer rows cols) _ = MaxPoolingLayer rows cols
+applyTensorialAction layer _ = error "Bad layer action pairing"
+
+applyActions :: NeuralNetwork -> [GradientAction] -> [GradientAction] -> NeuralNetwork
+applyActions (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialActions denseActions = let nextTensorialNetwork = zipWith applyTensorialAction tensorialNetwork tensorialActions in
+                                                                                                  let nextDenseNetwork = zipWith applyDenseAction denseNetwork denseActions in
+                                                                                                  ConvolutionalNetwork nextTensorialNetwork nextDenseNetwork
