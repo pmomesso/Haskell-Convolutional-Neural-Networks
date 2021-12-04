@@ -165,9 +165,9 @@ diffKernelMultiChannel kRows kCols inputs dE_dH = fmap (diffKernelSingleChannel 
 diffKernelTensor :: Int -> Int -> Image -> Image -> KernelTensor
 diffKernelTensor kRows kCols inputs = fmap (diffKernelMultiChannel kRows kCols inputs)
 
-diffBiasSingleChannel dE_dH = sum $ M.toList dE_dH
+diffKernelBiasSingleChannel dE_dH = sum $ M.toList dE_dH
 
-diffBias = V.map diffBiasSingleChannel
+diffKernelBias = V.map diffKernelBiasSingleChannel
 
 diffInputSingleChannel :: RealMatrix -> RealMatrix -> RealMatrix
 diffInputSingleChannel dE_dH kernel = let indices = [ (i, j) | i <- [1..(M.nrows dE_dH)], j <- [1..(M.ncols dE_dH)] ] in
@@ -219,6 +219,12 @@ backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
                                                                       let deltasVector = softmaxDeltas excitationVec dE_dO in
                                                                       let deltasColVector = M.colVector $ softmaxDeltas excitationVec dE_dO in
                                                                       (M.transpose weights * deltasColVector, deltasVector)
+
+diffDenseLayer :: Num a => V.Vector a -> V.Vector a -> M.Matrix a
+diffDenseLayer inputs deltas = M.colVector inputs * M.transpose (M.colVector deltas)
+
+diffDenseBias :: V.Vector a -> M.Matrix a
+diffDenseBias = M.colVector
 
 data LayerState = MaxPoolingLayerState Image Image | ConvolutionalLayerState Image Image | DenseLayerState (V.Vector Float) (V.Vector Float) | SoftmaxLayerState (V.Vector Float) (V.Vector Float) | EmptyState
 data LayerOutput = ImageOutput Image | VectorOutput (V.Vector Float)
@@ -305,12 +311,13 @@ deflattenToSameDimensionsOf image vector = let asLists = partitionIn (V.length i
                                            let cols = M.ncols $ V.head image in
                                            V.fromList $ fmap (M.fromList rows cols) asLists
 
+extractLayerExcitation :: LayerState -> Image
+extractLayerExcitation (ConvolutionalLayerState _ exc) = exc
+extractLayerExcitation _ = error "not implemented"
+
 backpropagationNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialLayerStates denseLayerStates dE_dO =
                                                                                         let denseBPResults = backwardDenseNetwork denseNetwork denseLayerStates dE_dO in
                                                                                         let (DenseLayerBPResult dE_dI _) = last denseBPResults in
                                                                                         let next_dE_dO = deflattenToSameDimensionsOf (extractLayerExcitation $ last tensorialLayerStates) dE_dI in
                                                                                         let tensorialBPResults = backwardTensorialNetwork tensorialNetwork tensorialLayerStates next_dE_dO in
                                                                                         tensorialBPResults ++ denseBPResults
-extractLayerExcitation :: LayerState -> Image
-extractLayerExcitation (ConvolutionalLayerState _ exc) = exc
-extractLayerExcitation _ = error "not implemented"
