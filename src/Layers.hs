@@ -402,3 +402,12 @@ applyActions :: NeuralNetwork -> [GradientAction] -> [GradientAction] -> NeuralN
 applyActions (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialActions denseActions = let nextTensorialNetwork = zipWith applyTensorialAction tensorialNetwork tensorialActions in
                                                                                                   let nextDenseNetwork = zipWith applyDenseAction denseNetwork denseActions in
                                                                                                   ConvolutionalNetwork nextTensorialNetwork nextDenseNetwork
+
+
+
+nextNetwork :: Float -> NeuralNetwork -> [LayerState] -> [LayerState] -> V.Vector Float -> NeuralNetwork
+nextNetwork eta (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialStates denseStates dE_dO =
+                                                                            let (tensorialBPResults, denseBPResults) = backpropagationNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialStates denseStates dE_dO in
+                                                                            let (intermediateTActions, intermediateDActions) = diffNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialStates denseStates tensorialBPResults denseBPResults in
+                                                                            let (tensorialActions, denseActions) = (toTensorialActions eta $ unzip intermediateTActions, toDenseActions eta $ unzip intermediateDActions) in
+                                                                            applyActions (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialActions denseActions
