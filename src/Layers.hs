@@ -1,5 +1,7 @@
 module Layers where
 
+{- Most important functions: forwardNetworkWithState, nextNetwork -}
+
 import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
