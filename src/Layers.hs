@@ -190,11 +190,12 @@ deltasConvMultiChannel :: (Float -> Float) -> Image -> Image -> Image
 deltasConvMultiChannel activationDerivative = V.zipWith (deltasConvSingleChannel activationDerivative)
 
 {- TODO -}
-backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image -> Image
-backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputChannels outputChannels dE_dOChannels = backwardPoolingLayerMultiChannel supportRows supportCols dE_dOChannels outputChannels inputChannels
+backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image -> (Image, Image)
+backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputChannels outputChannels dE_dOChannels = let dE_dO = backwardPoolingLayerMultiChannel supportRows supportCols dE_dOChannels outputChannels inputChannels in
+                                                                                                              (dE_dO, dE_dO)
 backwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation activationDerivative) inputChannels excitationChannels dE_dOChannels =
                                                                                       let deltas = deltasConvMultiChannel activationDerivative excitationChannels dE_dOChannels in
-                                                                                      diffInput deltas kernelTensor
+                                                                                      (diffInput deltas kernelTensor, deltas)
 
 {- TODO: dE_dH, dE_dW, dE_dB, dE_dI functions for dense layers -}
 softmaxDeltaTerms exps s dE_dO termIndex index = if termIndex == index
@@ -207,14 +208,16 @@ softmaxDeltas excitationVec dE_dO = let exps = fmap exp excitationVec in
                                     let s = sum exps in
                                     V.generate (V.length excitationVec) (softmaxDeltaTerm exps s dE_dO)
 
-backwardDenseLayer :: DenseLayer -> V.Vector Float -> V.Vector Float -> V.Vector Float -> RealMatrix
+backwardDenseLayer :: DenseLayer -> V.Vector Float -> V.Vector Float -> V.Vector Float -> (RealMatrix, V.Vector Float)
 backwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputVector excitationVec dE_dO =
-                                                                                      let deltasColVector = elemwiseMult (M.colVector dE_dO) (activationDerivative <$> M.colVector excitationVec) in
-                                                                                      M.transpose weights * deltasColVector
+                                                                                      let deltasVector = activationDerivative <$> excitationVec in
+                                                                                      let deltasColVector = elemwiseMult (M.colVector dE_dO) (M.colVector deltasVector) in
+                                                                                      (M.transpose weights * deltasColVector, deltasVector)
 
 backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
+                                                                      let deltasVector = softmaxDeltas excitationVec dE_dO in
                                                                       let deltasColVector = M.colVector $ softmaxDeltas excitationVec dE_dO in
-                                                                      M.transpose weights * deltasColVector
+                                                                      (M.transpose weights * deltasColVector, deltasVector)
 
 data LayerState = MaxPoolingLayerState Image Image | ConvolutionalLayerState Image Image | DenseLayerState (V.Vector Float) (V.Vector Float) | SoftmaxLayerState (V.Vector Float) (V.Vector Float) | EmptyState
 data LayerOutput = ImageOutput Image | VectorOutput (V.Vector Float)
@@ -248,3 +251,41 @@ forwardNetworkWithState (ConvolutionalNetwork tensorialNetwork denseNetwork) ima
                                                                                       let tensorAsVector = (flattenMatrices . snd . last) tensorialStates in
                                                                                       let denseStates = forwardDenseNetworkWithState denseNetwork tensorAsVector in
                                                                                       fmap (second ImageOutput) tensorialStates ++ fmap (second VectorOutput) denseStates
+
+data BackpropagationResult = EmptyBPResultDense (V.Vector Float) | EmptyBPResultTensorial Image | DenseLayerBPResult (V.Vector Float) (V.Vector Float) | TensorialLayerBPResult Image Image
+
+toVector realMatrix = V.fromList $ M.toList realMatrix
+
+{- TODO: backward dense network -}
+backwardDenseNetwork :: DenseNetwork -> [LayerState] -> V.Vector Float -> [BackpropagationResult]
+backwardDenseNetwork denseNetwork layerStates dE_dO = let layersPairedWithStates = zip denseNetwork layerStates in
+                                                      scanr backpropagationStepDense (EmptyBPResultDense dE_dO) layersPairedWithStates
+
+backpropagationStepDense :: (DenseLayer, LayerState) -> BackpropagationResult -> BackpropagationResult
+backpropagationStepDense (denseLayer, denseLayerState) (DenseLayerBPResult curr_dE_dO _) = 
+                                                                case denseLayerState of
+                                                                DenseLayerState input exc -> let (dE_dI, dE_dH) = backwardDenseLayer denseLayer input exc curr_dE_dO in
+                                                                                             DenseLayerBPResult (toVector dE_dI) dE_dH
+                                                                SoftmaxLayerState input exc -> let (dE_dI, dE_dH) = backwardDenseLayer denseLayer input exc curr_dE_dO in
+                                                                                             DenseLayerBPResult (toVector dE_dI) dE_dH
+                                                                _ -> error "Bad pairing of layer with state"
+
+backpropagationStepDense _ _ = error "Bad pairing of layer with state"
+
+{- TODO: backward tensorial network -}
+backwardTensorialNetwork :: [TensorialLayer] -> [LayerState] -> Image -> [BackpropagationResult]
+backwardTensorialNetwork tensorialNetwork layerStates dE_dO = let layersPairedWithStates = zip tensorialNetwork layerStates in
+                                                              scanr backpropagationStepTensorial (EmptyBPResultTensorial dE_dO) layersPairedWithStates
+
+backpropagationStepTensorial :: (TensorialLayer, LayerState) -> BackpropagationResult -> BackpropagationResult
+backpropagationStepTensorial (tensorialLayer, tensorialLayerState) (TensorialLayerBPResult curr_dE_dO _) =
+                                                                case tensorialLayerState of
+                                                                  ConvolutionalLayerState input exc -> let (dE_dI, dE_dH) = backwardTensorialLayer tensorialLayer input exc curr_dE_dO in
+                                                                                            TensorialLayerBPResult dE_dI dE_dH
+                                                                  MaxPoolingLayerState input output -> let (dE_dI, _) = backwardTensorialLayer tensorialLayer input output curr_dE_dO in
+                                                                                            TensorialLayerBPResult dE_dI dE_dI
+                                                                  _ -> error "Bad pairing of layer with state"
+
+backpropagationStepTensorial _ _ = error "Bad pairing of layer with state"
+
+{- TODO: backward network -}
