@@ -429,19 +429,29 @@ nextNetwork eta (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialSt
                                                                             let (tensorialActions, denseActions) = (toTensorialActions eta $ unzip intermediateTActions, toDenseActions eta $ unzip intermediateDActions) in
                                                                             applyActions (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialActions denseActions
 
-trainNetwork :: NeuralNetwork -> Float -> CategoricalDataset Image -> (Category -> V.Vector Float -> Float) -> (Category -> V.Vector Float -> V.Vector Float) -> NeuralNetwork
+trainNetwork :: NeuralNetwork -> Float -> CategoricalDataset Image -> (Category -> V.Vector Float -> Float) -> (Category -> V.Vector Float -> V.Vector Float) -> [(Float, NeuralNetwork)]
 trainNetwork network eta dataset errorFunction dErrorFunction = 
-                              let n = foldl (trainingStep eta dErrorFunction) network dataset in 
+                              let (tensorialStates, denseStates) = forwardNetworkWithState network (extractInput $ head dataset) in
+                              let probabilityVector = extractOutputs $ last denseStates in
+                              let errorValue = errorFunction (extractCat $ head dataset) probabilityVector in
+                              let n = scanl (trainingStep eta errorFunction dErrorFunction) (errorValue, network) dataset in 
                               n
 
-trainingStep :: Float -> (Category -> V.Vector Float -> V.Vector Float) -> NeuralNetwork -> CategoricalDataPoint Image -> NeuralNetwork
-trainingStep eta dErrorFunction neuralNetwork (CategoricalDataPoint img correctCat) =
-                                let (tensorialStates, denseStates) = forwardNetworkWithState neuralNetwork img in
+trainingStep :: Float -> (Category -> V.Vector Float -> Float) -> (Category -> V.Vector Float -> V.Vector Float) -> (Float, NeuralNetwork) -> CategoricalDataPoint Image -> (Float, NeuralNetwork)
+trainingStep eta errorFunction dErrorFunction neuralNetwork (CategoricalDataPoint img correctCat) =
+                                let (tensorialStates, denseStates) = forwardNetworkWithState (snd neuralNetwork) img in
                                 let probabilityVector = extractOutputs $ last denseStates in
+                                let errorValue = errorFunction correctCat probabilityVector in
                                 let dE_dO = dErrorFunction correctCat probabilityVector in
-                                nextNetwork eta neuralNetwork tensorialStates denseStates dE_dO
+                                (errorValue, nextNetwork eta (snd neuralNetwork) tensorialStates denseStates dE_dO)
 
 extractOutputs :: LayerState -> V.Vector Float
 extractOutputs (DenseLayerState input output) = output
 extractOutputs (SoftmaxLayerState input output) = output
 extractOutputs _ = error "Not implemented!"
+
+extractCat :: CategoricalDataPoint a -> Category
+extractCat (CategoricalDataPoint img cat) = cat
+
+extractInput :: CategoricalDataPoint a -> a
+extractInput (CategoricalDataPoint img cat) = img
