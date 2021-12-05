@@ -6,21 +6,21 @@ import qualified Data.Vector as V
 import System.Random
 import System.Environment (getArgs)
 import Data.List.Split (splitOn)
-import Functions    
+import Functions
 import Layers
+import Control.Monad ( zipWithM )
 
 main :: IO ()
 main = do
     networkDescription <- readNetworkDescription
     let (inputDimsString, tensorialTowerStringList, denseTowerStringList) = networkDescription
     let [channels, rows, cols] = parseInputDims inputDimsString
-    tensorialNetwork <- sequence $ map randomTensorialLayerFromDescr tensorialTowerStringList
+    tensorialNetwork <- mapM randomTensorialLayerFromDescr tensorialTowerStringList
     let (channelsAfter, rowsAfter, colsAfter) = resultingDimensionTensorialNetwork tensorialNetwork (channels, rows, cols)
     let numUnits = channelsAfter * rowsAfter * colsAfter
-    let dimensions = [numUnits] ++ dimensionFromDescrList denseTowerStringList
-    print ((channelsAfter, rowsAfter, colsAfter), numUnits)
-    denseNetwork <- sequence $ zipWith randomDenseLayerFromDescr dimensions denseTowerStringList
-    print $ denseNetwork
+    let dimensions = numUnits : dimensionFromDescrList denseTowerStringList
+    denseNetwork <- zipWithM randomDenseLayerFromDescr dimensions denseTowerStringList
+    print denseNetwork
 
 parseInputDims :: String -> [Int]
 parseInputDims str = atoi <$> splitOn " " (trim $ tail str)
@@ -42,7 +42,7 @@ trim :: String -> String
 trim str = let frontStripped = dropWhile (==' ') str in reverse (dropWhile (==' ') $ reverse frontStripped)
 
 randomFloat :: IO Float
-randomFloat = do
+randomFloat =
     randomIO :: IO Float
 
 randomRealMatrix :: Int -> Int -> IO (M.Matrix Float)
@@ -80,7 +80,8 @@ maxPoolingLayerFromDescr body = do
     let [suppRows, suppCols] = fmap atoi splitBody
     return $ MaxPoolingLayer suppRows suppCols
 
-dimensionFromDescrList descrList = fmap (\str -> atoi $ (head . tail) (splitOn " " str)) descrList
+dimensionFromDescrList :: [[Char]] -> [Int]
+dimensionFromDescrList = fmap (atoi . (head . tail) . splitOn " ")
 
 randomDenseLayerFromDescr :: Int -> String -> IO DenseLayer
 randomDenseLayerFromDescr numUnits str = do
