@@ -80,10 +80,11 @@ randomDenseLayerFromDescr numUnits str = do
     let layerType = head str
     let body = trim $ tail str
     case layerType of
-        'D' -> return $ randomFullyConnectedLayer numUnits body
-        'S' -> return $ randomSoftmaxLayer numUnits body
+        'D' -> randomFullyConnectedLayer numUnits body
+        'S' -> randomSoftmaxLayer numUnits body
         _ -> error "Invalid syntax"
 
+randomFullyConnectedLayer :: Int -> String -> IO DenseLayer
 randomFullyConnectedLayer numUnits body = do
     let splitBody = splitOn "," body
     let [ outputDim ] = fmap atoi splitBody
@@ -91,6 +92,7 @@ randomFullyConnectedLayer numUnits body = do
     let biasVector = V.generate outputDim (const 0)
     return $ DenseLayer weightMatrix biasVector relu dRelu
 
+randomSoftmaxLayer :: Int -> String -> IO DenseLayer
 randomSoftmaxLayer numUnits body = do
     let splitBody = splitOn "," body
     let [ outputDim ] = fmap atoi splitBody
