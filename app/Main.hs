@@ -20,7 +20,6 @@ main = do
     let dimensions = [numUnits] ++ dimensionFromDescrList denseTowerStringList
     print ((channelsAfter, rowsAfter, colsAfter), numUnits)
     denseNetwork <- sequence $ zipWith randomDenseLayerFromDescr dimensions denseTowerStringList
-    print $ zip dimensions denseTowerStringList
     print $ denseNetwork
 
 parseInputDims :: String -> [Int]
