@@ -17,8 +17,8 @@ main = do
     print $ M.nrows $ V.head tensor
     return ()
 
-main1 :: IO ()
-main1 = do
+readNetworkFromStdin :: IO NeuralNetwork
+readNetworkFromStdin = do
     networkDescription <- readNetworkDescription
     let (inputDimsString, tensorialTowerStringList, denseTowerStringList) = networkDescription
     let [channels, rows, cols] = parseInputDims inputDimsString
@@ -27,7 +27,7 @@ main1 = do
     let numUnits = channelsAfter * rowsAfter * colsAfter
     let dimensions = numUnits : dimensionFromDescrList denseTowerStringList
     denseNetwork <- zipWithM randomDenseLayerFromDescr dimensions denseTowerStringList
-    print denseNetwork
+    return $ ConvolutionalNetwork tensorialNetwork denseNetwork
 
 readGrayscaleFromPath :: String -> IO L.Image
 readGrayscaleFromPath imagePath = do
