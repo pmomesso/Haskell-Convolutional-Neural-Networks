@@ -11,6 +11,7 @@ import Layers
 import Control.Monad ( zipWithM )
 import Codec.Picture (readImage, Pixel (pixelAt), convertRGB8, DynamicImage (ImageY8), Image (Image, imageHeight, imageWidth), PixelRGB8 (PixelRGB8))
 import System.Directory (listDirectory)
+import Control.Applicative (Applicative(liftA2))
 
 type Category = Int
 data CategoricalDataPoint a = CategoricalDataPoint a Category
@@ -92,6 +93,24 @@ trim str = let frontStripped = dropWhile (==' ') str in reverse (dropWhile (==' 
 randomFloat :: IO Float
 randomFloat =
     randomIO :: IO Float
+
+shuffle :: Int -> [a] -> IO [a]
+shuffle nums list = do
+    if nums == 0
+    then return []
+    else fmap singleton (pick list) `liftedConcat` shuffle (nums - 1) list
+
+liftedConcat :: IO [a] -> IO [a] -> IO [a]
+liftedConcat = liftA2 (++) :: IO [a] -> IO [a] -> IO [a]
+
+singleton :: a -> [a]
+singleton x = [x]
+
+pick :: [a] -> IO a
+pick list = do
+    randomInt <- randomIO :: IO Int
+    let randomIndex = randomInt `mod` length list
+    return $ list !! randomIndex
 
 randomRealMatrix :: Int -> Int -> IO (M.Matrix Float)
 randomRealMatrix rows cols = do
