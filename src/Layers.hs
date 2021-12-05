@@ -6,6 +6,7 @@ import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
 import Data.Bifunctor ( Bifunctor(second) )
+import Dataset
 
 type RealMatrix = M.Matrix Float
 type Kernel = V.Vector (M.Matrix Float)
@@ -427,3 +428,20 @@ nextNetwork eta (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialSt
                                                                             let (intermediateTActions, intermediateDActions) = diffNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialStates denseStates tensorialBPResults denseBPResults in
                                                                             let (tensorialActions, denseActions) = (toTensorialActions eta $ unzip intermediateTActions, toDenseActions eta $ unzip intermediateDActions) in
                                                                             applyActions (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialActions denseActions
+
+trainNetwork :: NeuralNetwork -> Float -> CategoricalDataset Image -> (Category -> V.Vector Float -> Float) -> (Category -> V.Vector Float -> V.Vector Float) -> NeuralNetwork
+trainNetwork network eta dataset errorFunction dErrorFunction = 
+                              let n = foldl (trainingStep eta dErrorFunction) network dataset in 
+                              n
+
+trainingStep :: Float -> (Category -> V.Vector Float -> V.Vector Float) -> NeuralNetwork -> CategoricalDataPoint Image -> NeuralNetwork
+trainingStep eta dErrorFunction neuralNetwork (CategoricalDataPoint img correctCat) =
+                                let (tensorialStates, denseStates) = forwardNetworkWithState neuralNetwork img in
+                                let probabilityVector = extractOutputs $ last denseStates in
+                                let dE_dO = dErrorFunction correctCat probabilityVector in
+                                nextNetwork eta neuralNetwork tensorialStates denseStates dE_dO
+
+extractOutputs :: LayerState -> V.Vector Float
+extractOutputs (DenseLayerState input output) = output
+extractOutputs (SoftmaxLayerState input output) = output
+extractOutputs _ = error "Not implemented!"

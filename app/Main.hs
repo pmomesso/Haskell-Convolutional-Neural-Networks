@@ -1,6 +1,5 @@
 module Main where
 
-import qualified Layers as L
 import qualified Data.Matrix as M
 import qualified Data.Vector as V
 import System.Random
@@ -8,14 +7,16 @@ import System.Environment (getArgs)
 import Data.List.Split (splitOn)
 import Functions
 import Layers
+import qualified Layers as L
 import Control.Monad ( zipWithM )
 import Codec.Picture (readImage, Pixel (pixelAt), convertRGB8, DynamicImage (ImageY8), Image (Image, imageHeight, imageWidth), PixelRGB8 (PixelRGB8))
 import System.Directory (listDirectory)
 import Control.Applicative (Applicative(liftA2))
+import Dataset
 
-type Category = Int
-data CategoricalDataPoint a = CategoricalDataPoint a Category
-type CategoricalDataset a = [ CategoricalDataPoint a ]
+-- type Category = Int
+-- data CategoricalDataPoint a = CategoricalDataPoint a Category
+-- type CategoricalDataset a = [ CategoricalDataPoint a ]
 
 extractCategory :: CategoricalDataPoint a -> Category
 extractCategory (CategoricalDataPoint _ c) = c
@@ -23,7 +24,10 @@ extractCategory (CategoricalDataPoint _ c) = c
 main :: IO ()
 main = do
     dataSet <- readDataset "./dataset"
-    print $ fmap extractCategory dataSet
+    network <- readNetworkFromStdin
+    shuffledDataset <- shuffle 100 dataSet
+    let trainedNetwork = trainNetwork network 1e-2 shuffledDataset crossEntropy dCrossEntropy
+    return ()
 
 pair :: [a -> b] -> [[a]] -> [[b]]
 pair = zipWith fmap
