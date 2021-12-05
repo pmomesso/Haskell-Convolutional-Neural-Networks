@@ -10,12 +10,32 @@ import Functions
 import Layers
 import Control.Monad ( zipWithM )
 import Codec.Picture (readImage, Pixel (pixelAt), convertRGB8, DynamicImage (ImageY8), Image (Image, imageHeight, imageWidth), PixelRGB8 (PixelRGB8))
+import System.Directory (listDirectory)
+
+type Category = Int
+data CategoricalDataPoint a = CategoricalDataPoint a Category
+type CategoricalDataset a = [ CategoricalDataPoint a ]
 
 main :: IO ()
 main = do
     tensor <- readGrayscaleFromPath "8-bit-256-x-256-Grayscale-Lena-Image.png"
     print $ M.nrows $ V.head tensor
-    return ()
+
+pair :: [a -> b] -> [[a]] -> [[b]]
+pair = zipWith fmap
+
+readDataset :: FilePath -> IO [CategoricalDataPoint L.Image]
+readDataset dir = do
+    classesDirs <- listDirectory dir
+    let classes = fmap atoi classesDirs
+    imagesNoCategories <- mapM readImagesFromDir classesDirs
+    let imagesWithCategories = concat $ pair (fmap (flip CategoricalDataPoint) classes) imagesNoCategories
+    return imagesWithCategories
+
+readImagesFromDir :: String -> IO [L.Image]
+readImagesFromDir dirPath = do
+    paths <- listDirectory dirPath
+    mapM readGrayscaleFromPath paths
 
 readNetworkFromStdin :: IO NeuralNetwork
 readNetworkFromStdin = do

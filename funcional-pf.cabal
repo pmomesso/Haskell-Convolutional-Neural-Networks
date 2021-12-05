@@ -35,6 +35,7 @@ library
   build-depends:
       JuicyPixels
     , base >=4.7 && <5
+    , directory
     , matrix
     , random
     , split
@@ -52,6 +53,7 @@ executable funcional-tp
   build-depends:
       JuicyPixels
     , base >=4.7 && <5
+    , directory
     , funcional-pf
     , matrix
     , random
@@ -71,6 +73,7 @@ test-suite funcional-pf-test
   build-depends:
       JuicyPixels
     , base >=4.7 && <5
+    , directory
     , funcional-pf
     , matrix
     , random
