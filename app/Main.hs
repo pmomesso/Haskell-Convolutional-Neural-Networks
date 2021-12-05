@@ -14,8 +14,14 @@ main = do
     networkDescription <- readNetworkDescription
     let (inputDimsString, tensorialTowerStringList, denseTowerStringList) = networkDescription
     let [channels, rows, cols] = parseInputDims inputDimsString
-
-    print networkDescription
+    tensorialNetwork <- sequence $ map randomTensorialLayerFromDescr tensorialTowerStringList
+    let (channelsAfter, rowsAfter, colsAfter) = resultingDimensionTensorialNetwork tensorialNetwork (channels, rows, cols)
+    let numUnits = channelsAfter * rowsAfter * colsAfter
+    let dimensions = [numUnits] ++ dimensionFromDescrList denseTowerStringList
+    print ((channelsAfter, rowsAfter, colsAfter), numUnits)
+    denseNetwork <- sequence $ zipWith randomDenseLayerFromDescr dimensions denseTowerStringList
+    print $ zip dimensions denseTowerStringList
+    print $ denseNetwork
 
 parseInputDims :: String -> [Int]
 parseInputDims str = atoi <$> splitOn " " (trim $ tail str)
@@ -44,7 +50,6 @@ randomRealMatrix :: Int -> Int -> IO (M.Matrix Float)
 randomRealMatrix rows cols = do
     let matrixValues = [ randomFloat | _ <- [1..rows*cols] ]
     matrixValues <- sequence matrixValues
-    print matrixValues
     return (M.fromList rows cols matrixValues)
 
 randomRealTensor :: Int -> Int -> Int -> IO (V.Vector (M.Matrix Float))
@@ -63,7 +68,7 @@ randomTensorialLayerFromDescr str =
 
 randomConvolutionalLayerFromDescr :: String -> IO TensorialLayer
 randomConvolutionalLayerFromDescr body = do
-    let splitBody = splitOn "," body
+    let splitBody = splitOn " " body
     let [numFilters, channels, rows, cols] = fmap atoi splitBody
     kernelTensorList <- sequence [ randomRealTensor channels rows cols | _ <- [1..numFilters] ]
     let kernelTensorListAsVector = V.fromList kernelTensorList
@@ -72,10 +77,13 @@ randomConvolutionalLayerFromDescr body = do
 
 maxPoolingLayerFromDescr :: String -> IO TensorialLayer
 maxPoolingLayerFromDescr body = do
-    let splitBody = splitOn "," body
+    let splitBody = splitOn " " body
     let [suppRows, suppCols] = fmap atoi splitBody
     return $ MaxPoolingLayer suppRows suppCols
 
+dimensionFromDescrList descrList = fmap (\str -> atoi $ (head . tail) (splitOn " " str)) descrList
+
+randomDenseLayerFromDescr :: Int -> String -> IO DenseLayer
 randomDenseLayerFromDescr numUnits str = do
     let layerType = head str
     let body = trim $ tail str

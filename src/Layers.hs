@@ -14,16 +14,31 @@ type Bias = Float
 type BiasVector = V.Vector Bias
 type Activation = Float -> Float
 type ActivationDerivative = Float -> Float
-
 type Image = V.Vector RealMatrix
-
 data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int Int
 data DenseLayer = DenseLayer RealMatrix BiasVector Activation ActivationDerivative | SoftmaxLayer RealMatrix BiasVector
-
 type DenseNetwork = [ DenseLayer ]
 type TensorialNetwork = [ TensorialLayer ]
 
 data NeuralNetwork = ConvolutionalNetwork TensorialNetwork DenseNetwork
+
+instance Show DenseLayer where
+  show (DenseLayer weights bias _ _) = "(" ++ show (M.ncols weights) ++ "," ++ show (M.nrows weights) ++ ")" 
+  show (SoftmaxLayer weights bias) = "(" ++ show (M.ncols weights) ++ "," ++ show (M.nrows weights) ++ ")"
+
+
+resultingDimension :: TensorialLayer -> (Int, Int, Int) -> (Int, Int, Int)
+resultingDimension (ConvolutionalLayer tensor _ _ _) (channels, rows, cols) =
+            let numFilters = V.length tensor in
+            let numRows = M.nrows $ (V.head . V.head) tensor in
+            let numCols = M.ncols $ (V.head . V.head) tensor in
+            (numFilters, rows - numRows + 1, cols - numCols + 1)
+
+resultingDimension (MaxPoolingLayer suppRows suppCols) (channels, rows, cols) =
+            (channels, rows `quot` suppRows, cols `quot` suppCols)
+
+resultingDimensionTensorialNetwork :: TensorialNetwork -> (Int, Int, Int) -> (Int, Int, Int)
+resultingDimensionTensorialNetwork network (channels, rows, cols) = foldl (flip resultingDimension) (channels, rows, cols) network
 
 {- TODO: declare instance of Image for summing -}
 
