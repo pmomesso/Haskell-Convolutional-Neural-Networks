@@ -24,6 +24,7 @@ dependencies:
 - text
 - matrix
 - random
+- split
 - vector
 
 library:

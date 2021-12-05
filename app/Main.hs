@@ -4,13 +4,26 @@ import qualified Layers as L
 import qualified Data.Matrix as M
 import qualified Data.Vector as V
 import System.Random
+import System.Environment (getArgs)
+import Data.List.Split (splitOn)
 
 main :: IO ()
 main = do
-    let rows = 2
-    let cols = 2
-    matrix <- randomRealMatrix rows cols
-    print matrix
+    networkDescription <- readNetworkDescription
+    print networkDescription
+
+readNetworkDescription :: IO (String, [String], [String])
+readNetworkDescription = do
+    networkDescriptionString               <- getLine
+    let             networkDescriptionList = splitOn "@" networkDescriptionString
+    let inputPlusTensorialTowerDescription = map trim $ splitOn "," $ head networkDescriptionList
+    let               imageInputDimensions = head inputPlusTensorialTowerDescription
+    let          tensorialTowerDescription = tail inputPlusTensorialTowerDescription
+    let              denseTowerDescription = map trim $ splitOn "," $ last networkDescriptionList
+    return (imageInputDimensions, tensorialTowerDescription, denseTowerDescription)
+
+trim :: String -> String
+trim str = let frontStripped = dropWhile (==' ') str in reverse (dropWhile (==' ') $ reverse frontStripped)
 
 randomFloat :: IO Float
 randomFloat = do
