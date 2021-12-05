@@ -35,6 +35,7 @@ library
   build-depends:
       base >=4.7 && <5
     , matrix
+    , random
     , text
     , vector
   default-language: Haskell2010
@@ -50,6 +51,7 @@ executable funcional-pf-exe
       base >=4.7 && <5
     , funcional-pf
     , matrix
+    , random
     , text
     , vector
   default-language: Haskell2010
@@ -66,6 +68,7 @@ test-suite funcional-pf-test
       base >=4.7 && <5
     , funcional-pf
     , matrix
+    , random
     , text
     , vector
   default-language: Haskell2010
