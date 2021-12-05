@@ -16,26 +16,32 @@ type Category = Int
 data CategoricalDataPoint a = CategoricalDataPoint a Category
 type CategoricalDataset a = [ CategoricalDataPoint a ]
 
+extractCategory :: CategoricalDataPoint a -> Category
+extractCategory (CategoricalDataPoint _ c) = c
+
 main :: IO ()
 main = do
-    tensor <- readGrayscaleFromPath "8-bit-256-x-256-Grayscale-Lena-Image.png"
-    print $ M.nrows $ V.head tensor
+    dataSet <- readDataset "./dataset"
+    print $ fmap extractCategory dataSet
 
 pair :: [a -> b] -> [[a]] -> [[b]]
 pair = zipWith fmap
 
 readDataset :: FilePath -> IO [CategoricalDataPoint L.Image]
 readDataset dir = do
-    classesDirs <- listDirectory dir
+    let cleanDir = if last dir == '/' then dir else dir ++ "/"
+    classesDirs <- listDirectory cleanDir
     let classes = fmap atoi classesDirs
-    imagesNoCategories <- mapM readImagesFromDir classesDirs
+    let classesPaths = fmap ((++"/") . (cleanDir++)) classesDirs
+    imagesNoCategories <- mapM readImagesFromDir classesPaths
     let imagesWithCategories = concat $ pair (fmap (flip CategoricalDataPoint) classes) imagesNoCategories
     return imagesWithCategories
 
 readImagesFromDir :: String -> IO [L.Image]
 readImagesFromDir dirPath = do
     paths <- listDirectory dirPath
-    mapM readGrayscaleFromPath paths
+    let cleanPaths = fmap (dirPath++) paths
+    mapM readGrayscaleFromPath cleanPaths
 
 readNetworkFromStdin :: IO NeuralNetwork
 readNetworkFromStdin = do
