@@ -40,7 +40,7 @@ library
     , vector
   default-language: Haskell2010
 
-executable funcional-pf-exe
+executable funcional-tp
   main-is: Main.hs
   other-modules:
       Paths_funcional_pf

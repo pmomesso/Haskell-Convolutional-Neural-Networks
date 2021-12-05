@@ -30,7 +30,7 @@ library:
   source-dirs: src
 
 executables:
-  funcional-pf-exe:
+  funcional-tp:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
