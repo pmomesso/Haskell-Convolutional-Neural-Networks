@@ -53,13 +53,13 @@ randomRealTensor depth rows cols = do
     matrices <- sequence realMatrices
     return $ V.fromList matrices
 
-randomLayerFromDescr str =
+randomTensorialLayerFromDescr str =
     let layerType = head str in
     let body = trim $ tail str in
     case layerType of
     'C' -> randomConvolutionalLayerFromDescr body
     'P' -> maxPoolingLayerFromDescr body
-    _ -> error "Not implemented"
+    _ -> error "Invalid syntax"
 
 randomConvolutionalLayerFromDescr :: String -> IO TensorialLayer
 randomConvolutionalLayerFromDescr body = do
@@ -75,3 +75,25 @@ maxPoolingLayerFromDescr body = do
     let splitBody = splitOn "," body
     let [suppRows, suppCols] = fmap atoi splitBody
     return $ MaxPoolingLayer suppRows suppCols
+
+randomDenseLayerFromDescr numUnits str = do
+    let layerType = head str
+    let body = trim $ tail str
+    case layerType of
+        'D' -> return $ randomFullyConnectedLayer numUnits body
+        'S' -> return $ randomSoftmaxLayer numUnits body
+        _ -> error "Invalid syntax"
+
+randomFullyConnectedLayer numUnits body = do
+    let splitBody = splitOn "," body
+    let [ outputDim ] = fmap atoi splitBody
+    weightMatrix <- randomRealMatrix outputDim numUnits
+    let biasVector = V.generate outputDim (const 0)
+    return $ DenseLayer weightMatrix biasVector relu dRelu
+
+randomSoftmaxLayer numUnits body = do
+    let splitBody = splitOn "," body
+    let [ outputDim ] = fmap atoi splitBody
+    weightMatrix <- randomRealMatrix outputDim numUnits
+    let biasVector = V.generate outputDim (const 0)
+    return $ SoftmaxLayer weightMatrix biasVector

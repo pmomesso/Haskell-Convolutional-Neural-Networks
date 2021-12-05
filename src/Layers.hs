@@ -24,7 +24,6 @@ type DenseNetwork = [ DenseLayer ]
 type TensorialNetwork = [ TensorialLayer ]
 
 data NeuralNetwork = ConvolutionalNetwork TensorialNetwork DenseNetwork
-data Layer = TTensorialLayer TensorialLayer | TDenseLayer DenseLayer
 
 {- TODO: declare instance of Image for summing -}
 
