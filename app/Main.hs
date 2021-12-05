@@ -9,9 +9,16 @@ import Data.List.Split (splitOn)
 import Functions
 import Layers
 import Control.Monad ( zipWithM )
+import Codec.Picture (readImage, Pixel (pixelAt), convertRGB8, DynamicImage (ImageY8), Image (Image, imageHeight, imageWidth), PixelRGB8 (PixelRGB8))
 
 main :: IO ()
 main = do
+    tensor <- readGrayscaleFromPath "8-bit-256-x-256-Grayscale-Lena-Image.png"
+    print $ M.nrows $ V.head tensor
+    return ()
+
+main1 :: IO ()
+main1 = do
     networkDescription <- readNetworkDescription
     let (inputDimsString, tensorialTowerStringList, denseTowerStringList) = networkDescription
     let [channels, rows, cols] = parseInputDims inputDimsString
@@ -21,6 +28,21 @@ main = do
     let dimensions = numUnits : dimensionFromDescrList denseTowerStringList
     denseNetwork <- zipWithM randomDenseLayerFromDescr dimensions denseTowerStringList
     print denseNetwork
+
+readGrayscaleFromPath :: String -> IO L.Image
+readGrayscaleFromPath imagePath = do
+    img <- readImage imagePath
+    case img of
+        Left x -> error $ "Couldn't read " ++ imagePath
+        Right x -> (return . imageToSingleChannelTensor) x
+
+imageToSingleChannelTensor :: DynamicImage -> V.Vector RealMatrix
+imageToSingleChannelTensor img =
+    let toRGB = convertRGB8 img in
+    V.fromList [ M.matrix (imageWidth toRGB) (imageHeight toRGB) (\(row, col) -> rgbToGray $ pixelAt toRGB row col) ]
+
+rgbToGray :: PixelRGB8 -> Float
+rgbToGray (PixelRGB8 r g b) = ((fromIntegral r :: Float) + (fromIntegral g :: Float) + (fromIntegral b :: Float)) / 3
 
 parseInputDims :: String -> [Int]
 parseInputDims str = atoi <$> splitOn " " (trim $ tail str)

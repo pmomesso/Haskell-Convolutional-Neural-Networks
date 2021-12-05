@@ -26,6 +26,8 @@ dependencies:
 - random
 - split
 - vector
+- JuicyPixels
+  #- hip
 
 library:
   source-dirs: src

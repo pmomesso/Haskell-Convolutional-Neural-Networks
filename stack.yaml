@@ -35,7 +35,16 @@ packages:
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:
 #
-# extra-deps:
+extra-deps:
+#- hip-1.5.6.0@sha256:296c55622f62485422c0a593c7306af1a5abf8ba9f866dcdffc281b01eba65d7,6988 
+#- Chart-diagrams-1.9.3@sha256:1535d5d0d3febca63138cecfde234315212611c21bb7f4358b2dae8c55c59003,1801
+#- SVGFonts-1.7.0.1@sha256:1aac5ffd1a7c09317f92e9d31380d61eb96ce412b0dbd4e2d22c609c3d0be360,4039
+#- diagrams-core-1.4.2@sha256:47de45658e8a805b7cb7f535e7b093daf7e861604fa3c70e25bd4ef481bf1571,2997
+#- diagrams-lib-1.4.4@sha256:1129be254377b926ce2e932113e4bd06256de878d163fbcbacacf1be97bdf3b0,8220
+#- diagrams-postscript-1.5@sha256:ea9ef970f653072cfde9715fad92481eedcc72a94da543c52a68ca33100902ab,2369
+#- diagrams-svg-1.4.3@sha256:407ff78cb7bd1f44c68b0059036186f17a281a053901e29d0139ab151e703247,3159
+#- svg-builder-0.1.1@sha256:22de54d326a6b6912e461e1302edb9108b02aac0b6a6368fcdc3c4a224d487fd,1440
+#- repa-3.4.1.4@sha256:df02acc0f65be7ff67cf71058841644425337c5ebd44c95b1ac1564a1e3c4858,3323
 # - acme-missiles-0.3
 # - git: https://github.com/commercialhaskell/stack.git
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
