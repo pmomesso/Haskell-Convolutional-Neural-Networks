@@ -273,11 +273,12 @@ forwardDenseNetworkWithState denseNetwork input = tail $ scanl f (EmptyState, in
                           where f prevLayerState denseLayer = let prevActivation = snd prevLayerState in
                                                               forwardDenseLayer denseLayer prevActivation
 
-forwardNetworkWithState :: NeuralNetwork -> Image -> ([LayerState], [LayerState])
+forwardNetworkWithState :: NeuralNetwork -> Image -> ([LayerState], [LayerState], V.Vector Float)
 forwardNetworkWithState (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let tensorialStates = forwardTensorialNetworkWithStates tensorialNetwork image in
                                                                                       let tensorAsVector = (flattenMatrices . snd . last) tensorialStates in
                                                                                       let denseStates = forwardDenseNetworkWithState denseNetwork tensorAsVector in
-                                                                                      (fmap fst tensorialStates, fmap fst denseStates)
+                                                                                      let probabilityVector = (snd . last) denseStates in
+                                                                                      (fmap fst tensorialStates, fmap fst denseStates, probabilityVector)
 
 data BackpropagationResult = EmptyBPResultDense (V.Vector Float) | EmptyBPResultTensorial Image | DenseLayerBPResult (V.Vector Float) (V.Vector Float) | TensorialLayerBPResult Image Image
 
@@ -447,16 +448,14 @@ nextNetwork eta (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialSt
 
 trainClassificationNetwork :: NeuralNetwork -> Float -> CategoricalDataset Image -> (Category -> V.Vector Float -> Float) -> (Category -> V.Vector Float -> V.Vector Float) -> [(Float, NeuralNetwork)]
 trainClassificationNetwork network eta dataset errorFunction dErrorFunction =
-                              let (tensorialStates, denseStates) = forwardNetworkWithState network (extractInput $ head dataset) in
-                              let probabilityVector = extractOutputs $ last denseStates in
+                              let (tensorialStates, denseStates, probabilityVector) = forwardNetworkWithState network (extractInput $ head dataset) in
                               let errorValue = errorFunction (extractCat $ head dataset) probabilityVector in
                               let n = scanl (trainingStep eta errorFunction dErrorFunction) (errorValue, network) (tail dataset) in
                               n
 
 trainingStep :: Float -> (Category -> V.Vector Float -> Float) -> (Category -> V.Vector Float -> V.Vector Float) -> (Float, NeuralNetwork) -> CategoricalDataPoint Image -> (Float, NeuralNetwork)
 trainingStep eta errorFunction dErrorFunction neuralNetwork (CategoricalDataPoint img correctCat) =
-                                let (tensorialStates, denseStates) = forwardNetworkWithState (snd neuralNetwork) img in
-                                let probabilityVector = extractOutputs $ last denseStates in
+                                let (tensorialStates, denseStates, probabilityVector) = forwardNetworkWithState (snd neuralNetwork) img in
                                 let errorValue = errorFunction correctCat probabilityVector in
                                 let dE_dO = dErrorFunction correctCat probabilityVector in
                                 (errorValue, nextNetwork eta (snd neuralNetwork) tensorialStates denseStates dE_dO)

@@ -140,7 +140,8 @@ readRandomIndex list = do
 randomRealMatrix :: Int -> Int -> IO (M.Matrix Float)
 randomRealMatrix rows cols = do
     matrixValues <- readRandomFloatList $ rows * cols
-    return (M.fromList rows cols matrixValues)
+    let scaled = map (*0.1) matrixValues
+    return (M.fromList rows cols scaled)
 
 readRandomFloatList :: Int -> IO [Float]
 readRandomFloatList n = randomListOf n randomFloat
