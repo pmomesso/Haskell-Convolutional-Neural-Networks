@@ -21,13 +21,30 @@ import Dataset
 extractCategory :: CategoricalDataPoint a -> Category
 extractCategory (CategoricalDataPoint _ c) = c
 
+extractTensorial (ConvolutionalNetwork tn _) = tn
+extractDense (ConvolutionalNetwork _ dn) = dn
+
+
+sampleSize = 10
+eta :: Float
+eta = 1e-2
+
+forwardNetworkWithState2 (ConvolutionalNetwork tensorialNetwork denseNetwork) image = let tensorialStates = forwardTensorialNetworkWithStates tensorialNetwork image in
+                                                                                      tensorialStates
+
 main :: IO ()
 main = do
-    dataSet <- readDataset "./dataset"
     network <- readNetworkFromStdin
-    shuffledDataset <- shuffle 100 dataSet
-    let trainedNetwork = trainNetwork network 1e-2 shuffledDataset crossEntropy dCrossEntropy
+    sampledDataset <- sampleDataSetFromPath "./dataset" sampleSize
+    let trainingHistory = trainClassificationNetwork network eta sampledDataset crossEntropy dCrossEntropy
+    print $ trainingErrorsList trainingHistory
     return ()
+
+trainingErrorsList :: [(a, b)] -> [a]
+trainingErrorsList = map fst
+
+sampleDataSetFromPath :: FilePath -> Int -> IO [CategoricalDataPoint L.Image]
+sampleDataSetFromPath path sampleSize = readDataset path >>= shuffle sampleSize
 
 pair :: [a -> b] -> [[a]] -> [[b]]
 pair = zipWith fmap
@@ -70,7 +87,7 @@ readGrayscaleFromPath imagePath = do
 imageToSingleChannelTensor :: DynamicImage -> V.Vector RealMatrix
 imageToSingleChannelTensor img =
     let toRGB = convertRGB8 img in
-    V.fromList [ M.matrix (imageWidth toRGB) (imageHeight toRGB) (\(row, col) -> rgbToGray $ pixelAt toRGB row col) ]
+    V.fromList [ M.matrix (imageHeight toRGB) (imageWidth toRGB) (\(row, col) -> rgbToGray (pixelAt toRGB (col-1) (row-1)) / 255.0 )]
 
 rgbToGray :: PixelRGB8 -> Float
 rgbToGray (PixelRGB8 r g b) = ((fromIntegral r :: Float) + (fromIntegral g :: Float) + (fromIntegral b :: Float)) / 3
@@ -99,34 +116,42 @@ randomFloat =
     randomIO :: IO Float
 
 shuffle :: Int -> [a] -> IO [a]
-shuffle nums list = do
+shuffle nums list =
     if nums == 0
     then return []
     else fmap singleton (pick list) `liftedConcat` shuffle (nums - 1) list
 
-liftedConcat :: IO [a] -> IO [a] -> IO [a]
-liftedConcat = liftA2 (++) :: IO [a] -> IO [a] -> IO [a]
+liftedConcat :: Monad m => m [a] -> m [a] -> m [a]
+liftedConcat = liftA2 (++)
 
 singleton :: a -> [a]
 singleton x = [x]
 
 pick :: [a] -> IO a
 pick list = do
+    index <- readRandomIndex list
+    return $ list !! index
+
+readRandomIndex :: [a] -> IO Int
+readRandomIndex list = do
     randomInt <- randomIO :: IO Int
-    let randomIndex = randomInt `mod` length list
-    return $ list !! randomIndex
+    return $ randomInt `mod` length list
 
 randomRealMatrix :: Int -> Int -> IO (M.Matrix Float)
 randomRealMatrix rows cols = do
-    let matrixValues = [ randomFloat | _ <- [1..rows*cols] ]
-    matrixValues <- sequence matrixValues
+    matrixValues <- readRandomFloatList $ rows * cols
     return (M.fromList rows cols matrixValues)
+
+readRandomFloatList :: Int -> IO [Float]
+readRandomFloatList n = randomListOf n randomFloat
+
+randomListOf :: Int -> IO a -> IO [a]
+randomListOf length generationAction = sequence [ generationAction | _ <- [1..length] ]
 
 randomRealTensor :: Int -> Int -> Int -> IO (V.Vector (M.Matrix Float))
 randomRealTensor depth rows cols = do
-    let realMatrices = [ randomRealMatrix rows cols | _ <- [1..depth] ]
-    matrices <- sequence realMatrices
-    return $ V.fromList matrices
+    matricesList <- randomListOf depth $ randomRealMatrix rows cols
+    return $ V.fromList matricesList
 
 randomTensorialLayerFromDescr str =
     let layerType = head str in
@@ -151,7 +176,7 @@ maxPoolingLayerFromDescr body = do
     let [suppRows, suppCols] = fmap atoi splitBody
     return $ MaxPoolingLayer suppRows suppCols
 
-dimensionFromDescrList :: [[Char]] -> [Int]
+dimensionFromDescrList :: [String] -> [Int]
 dimensionFromDescrList = fmap (atoi . (head . tail) . splitOn " ")
 
 randomDenseLayerFromDescr :: Int -> String -> IO DenseLayer
