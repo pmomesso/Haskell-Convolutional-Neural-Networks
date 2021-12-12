@@ -14,18 +14,13 @@ import System.Directory (listDirectory)
 import Control.Applicative (Applicative(liftA2))
 import Dataset
 
--- type Category = Int
--- data CategoricalDataPoint a = CategoricalDataPoint a Category
--- type CategoricalDataset a = [ CategoricalDataPoint a ]
-
 extractCategory :: CategoricalDataPoint a -> Category
 extractCategory (CategoricalDataPoint _ c) = c
 
 extractTensorial (ConvolutionalNetwork tn _) = tn
 extractDense (ConvolutionalNetwork _ dn) = dn
 
-
-sampleSize = 10
+sampleSize = 100
 eta :: Float
 eta = 1e-2
 
@@ -35,13 +30,18 @@ forwardNetworkWithState2 (ConvolutionalNetwork tensorialNetwork denseNetwork) im
 main :: IO ()
 main = do
     network <- readNetworkFromStdin
-    sampledDataset <- sampleDataSetFromPath "./dataset" sampleSize
+    dataset <- readDataset "./dataset"
+    sampledDataset <- sampleDataSet dataset sampleSize
     let trainingHistory = trainClassificationNetwork network eta sampledDataset crossEntropy dCrossEntropy
     print $ trainingErrorsList trainingHistory
+    -- print $ map extractCategory sampledDataset
+    putStr $ unlines (zipWith (curry show) (map extractCategory dataset) (map (forwardNeuralNetwork ((snd . last) trainingHistory) . extractInput) dataset))
     return ()
 
 trainingErrorsList :: [(a, b)] -> [a]
 trainingErrorsList = map fst
+
+sampleDataSet dataset sampleSize = shuffle sampleSize dataset
 
 sampleDataSetFromPath :: FilePath -> Int -> IO [CategoricalDataPoint L.Image]
 sampleDataSetFromPath path sampleSize = readDataset path >>= shuffle sampleSize
@@ -140,8 +140,7 @@ readRandomIndex list = do
 randomRealMatrix :: Int -> Int -> IO (M.Matrix Float)
 randomRealMatrix rows cols = do
     matrixValues <- readRandomFloatList $ rows * cols
-    let scaled = map (*0.1) matrixValues
-    return (M.fromList rows cols scaled)
+    return (M.fromList rows cols matrixValues)
 
 readRandomFloatList :: Int -> IO [Float]
 readRandomFloatList n = randomListOf n randomFloat
@@ -152,7 +151,8 @@ randomListOf length generationAction = sequence [ generationAction | _ <- [1..le
 randomRealTensor :: Int -> Int -> Int -> IO (V.Vector (M.Matrix Float))
 randomRealTensor depth rows cols = do
     matricesList <- randomListOf depth $ randomRealMatrix rows cols
-    return $ V.fromList matricesList
+    let scaled = fmap (fmap (/(fromIntegral (depth*rows*cols) :: Float))) matricesList
+    return $ V.fromList scaled
 
 randomTensorialLayerFromDescr str =
     let layerType = head str in
@@ -168,7 +168,8 @@ randomConvolutionalLayerFromDescr body = do
     let [numFilters, channels, rows, cols] = fmap atoi splitBody
     kernelTensorList <- sequence [ randomRealTensor channels rows cols | _ <- [1..numFilters] ]
     let kernelTensorListAsVector = V.fromList kernelTensorList
-    let biasVector = V.generate numFilters (const 0)
+    -- biasFloats <- readRandomFloatList numFilters
+    let biasVector = V.generate numFilters (const 0) --V.fromList (fmap (\b -> b*0.2 - 0.1) biasFloats)
     return $ ConvolutionalLayer kernelTensorListAsVector biasVector relu dRelu
 
 maxPoolingLayerFromDescr :: String -> IO TensorialLayer
@@ -194,13 +195,19 @@ randomFullyConnectedLayer numUnits body = do
     let splitBody = splitOn "," body
     let [ outputDim ] = fmap atoi splitBody
     weightMatrix <- randomRealMatrix outputDim numUnits
+    let xavierConstant = sqrt 6 / (sqrt (fromIntegral outputDim :: Float) + sqrt (fromIntegral numUnits :: Float))
+    let scaled = fmap (\w -> (2*w - 1)*xavierConstant) weightMatrix
+    biasFloats <- readRandomFloatList outputDim
     let biasVector = V.generate outputDim (const 0)
-    return $ DenseLayer weightMatrix biasVector relu dRelu
+    return $ DenseLayer scaled biasVector relu dRelu
 
 randomSoftmaxLayer :: Int -> String -> IO DenseLayer
 randomSoftmaxLayer numUnits body = do
     let splitBody = splitOn "," body
     let [ outputDim ] = fmap atoi splitBody
     weightMatrix <- randomRealMatrix outputDim numUnits
-    let biasVector = V.generate outputDim (const 0)
-    return $ SoftmaxLayer weightMatrix biasVector
+    let xavierConstant = sqrt 6 / (sqrt (fromIntegral outputDim :: Float) + sqrt (fromIntegral numUnits :: Float))
+    let scaled = fmap (\w -> (2*w - 1)*xavierConstant) weightMatrix
+    biasFloats <- readRandomFloatList outputDim
+    let biasVector =  V.generate outputDim (const 0) --V.fromList (fmap (\b -> b*0.2 - 0.1) biasFloats)
+    return $ SoftmaxLayer scaled biasVector

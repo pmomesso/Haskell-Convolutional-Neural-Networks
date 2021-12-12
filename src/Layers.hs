@@ -219,24 +219,28 @@ backwardTensorialLayer (ConvolutionalLayer kernelTensor biasVector activation ac
 
 {- TODO: dE_dH, dE_dW, dE_dB, dE_dI functions for dense layers -}
 softmaxDeltaTerms exps s dE_dO termIndex index = if termIndex == index
-                                                 then ((exps V.! termIndex)*s - (exps V.! termIndex)^2)/s^2
-                                                 else -(exps V.! termIndex)*(exps V.! index)/s^2
+                                                 then (((exps V.! termIndex)*s - (exps V.! termIndex)*(exps V.! termIndex))/(s^2)) * (dE_dO V.! termIndex)
+                                                 else (-1)*(((exps V.! termIndex)*(exps V.! index))/(s^2)) * (dE_dO V.! index)
 
-softmaxDeltaTerm exps s dE_dO termIndex = sum $ map (softmaxDeltaTerms exps s dE_dO termIndex) [0..V.length exps-1]
+softmaxDeltaTerm :: V.Vector Float -> Float -> V.Vector Float -> Int -> Float
+softmaxDeltaTerm exps s dE_dO termIndex = sum $ map (softmaxDeltaTerms exps s dE_dO termIndex) [0..(V.length exps-1)]
 
+softmaxDeltas :: V.Vector Float -> V.Vector Float -> V.Vector Float
 softmaxDeltas excitationVec dE_dO = let exps = fmap exp excitationVec in
                                     let s = sum exps in
-                                    V.generate (V.length excitationVec) (softmaxDeltaTerm exps s dE_dO)
+                                    shiftLeft $ V.generate (V.length excitationVec) (softmaxDeltaTerm exps s dE_dO)
+
+shiftLeft v = V.generate (V.length v) (\index -> v V.! ((index - 1) `mod` V.length v))
 
 backwardDenseLayer :: DenseLayer -> V.Vector Float -> V.Vector Float -> V.Vector Float -> (RealMatrix, V.Vector Float)
 backwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputVector excitationVec dE_dO =
                                                                                       let deltasVector = activationDerivative <$> excitationVec in
                                                                                       let deltasColVector = elemwiseMult (M.colVector dE_dO) (M.colVector deltasVector) in
-                                                                                      (M.transpose weights * deltasColVector, deltasVector)
+                                                                                      (M.transpose weights * deltasColVector, M.getCol 1 deltasColVector)
 
 backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
                                                                       let deltasVector = softmaxDeltas excitationVec dE_dO in
-                                                                      let deltasColVector = M.colVector $ softmaxDeltas excitationVec dE_dO in
+                                                                      let deltasColVector = M.colVector deltasVector in
                                                                       (M.transpose weights * deltasColVector, deltasVector)
 
 diffDenseLayer :: Num a => V.Vector a -> V.Vector a -> M.Matrix a
