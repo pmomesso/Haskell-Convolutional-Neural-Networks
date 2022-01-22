@@ -3,8 +3,6 @@ module CommonTypes where
 import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
-applyPair f (x, y) = (f x, f y)
-
 {- Types for representing datapoints -}
 type RealMatrix = M.Matrix Float
 
@@ -89,20 +87,8 @@ setSubMatrix target block i j = let dRows = M.nrows block in
                                 let f mat (row, col) = M.setElem (M.getElem row col block) (row + i - 1, col + j - 1) mat in
                                 foldl f target indices
 
-indicatorFunction :: Eq a => a -> a -> Float
-indicatorFunction elem x = if x == elem then 1.0 else 0.0
-
 indicatorBlock :: Eq a => Int -> Int -> M.Matrix a -> M.Matrix a -> (Int, Int) -> M.Matrix Float
 indicatorBlock supportRows supportCols output mat (i, j) = fmap (indicatorFunction $ M.getElem i j output) (M.submatrix ((i - 1)*supportRows + 1) ((i - 1)*supportRows + supportRows) ((j - 1)*supportCols + 1) ((j - 1)*supportCols + supportCols) mat)
-
-partitionInRec :: Int -> [a] -> [[a]]
-partitionInRec perPartition [] = []
-partitionInRec perPartition list = take perPartition list : partitionInRec perPartition (drop perPartition list)
-
-partitionIn :: Int -> [a] -> [[a]]
-partitionIn n list = let numValues = length list in
-                     let perPartition = numValues `quot` n in
-                     partitionInRec perPartition list
 
 deflattenToSameDimensionsOf :: Image -> V.Vector Float -> Image
 deflattenToSameDimensionsOf image vector = let asLists = partitionIn (V.length image) (V.toList vector) in
@@ -124,3 +110,23 @@ sumTensors = V.zipWith (V.zipWith (+))
 
 instance Num a => Num (V.Vector a) where
   (+) = V.zipWith (+)
+
+{- Rest of utility functions go here -}
+applyPair f (x, y) = (f x, f y)
+
+indicatorFunction :: Eq a => a -> a -> Float
+indicatorFunction elem x = if x == elem then 1.0 else 0.0
+
+partitionInRec :: Int -> [a] -> [[a]]
+partitionInRec perPartition [] = []
+partitionInRec perPartition list = take perPartition list : partitionInRec perPartition (drop perPartition list)
+
+partitionIn :: Int -> [a] -> [[a]]
+partitionIn n list = let numValues = length list in
+                     let perPartition = numValues `quot` n in
+                     partitionInRec perPartition list
+
+extractLayerExcitation :: LayerState -> Image
+extractLayerExcitation (ConvolutionalLayerState _ exc) = exc
+extractLayerExcitation (MaxPoolingLayerState input output) = output
+extractLayerExcitation _ = error "not implemented"

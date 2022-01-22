@@ -6,16 +6,6 @@ import qualified Data.Matrix as M
 
 data TensorialLayer = ConvolutionalLayer KernelTensor BiasVector Activation ActivationDerivative | MaxPoolingLayer Int Int
 
-resultingDimension :: TensorialLayer -> (Int, Int, Int) -> (Int, Int, Int)
-resultingDimension (ConvolutionalLayer tensor _ _ _) (channels, rows, cols) =
-            let numFilters = V.length tensor in
-            let numRows = M.nrows $ (V.head . V.head) tensor in
-            let numCols = M.ncols $ (V.head . V.head) tensor in
-            (numFilters, rows - numRows + 1, cols - numCols + 1)
-
-resultingDimension (MaxPoolingLayer suppRows suppCols) (channels, rows, cols) =
-            (channels, rows `quot` suppRows, cols `quot` suppCols)
-
 windowIndices :: Int -> Int -> M.Matrix a -> [(Int, Int)]
 windowIndices numRows numCols rm = [(i, j) | i <- [1..(M.nrows rm - numRows + 1)], j <- [1..(M.ncols rm - numCols + 1)]]
 
@@ -27,29 +17,20 @@ windows mat kerDim = map windowStartingAtIndex indices
     where windowStartingAtIndex = window mat kerDim
           indices = windowIndices kerDim kerDim mat
 
-{- Option 1
-convolve :: Num a => M.Matrix a -> M.Matrix a -> M.Matrix a
-convolve ker mat = let kerDim = M.nrows ker in 
-                   let rows = M.nrows mat in
-                   let cols = M.ncols mat in
-                   M.fromList (rows - kerDim + 1) (cols - kerDim + 1) $ map (applyKernel ker) (windows mat (M.nrows ker))
--}
-
-{- Option 2 -}
-convolve :: M.Matrix Float -> M.Matrix Float -> M.Matrix Float
+{- Convolution operation definition -}
+convolve :: RealMatrix  -> RealMatrix -> RealMatrix
 convolve ker mat = let kerDim = M.nrows ker in
                    let rows = M.nrows mat in
                    let cols = M.ncols mat in
                    M.matrix (rows - kerDim + 1) (cols - kerDim + 1) (applyKernel ker . window mat kerDim)
 
-convolveByChannel :: V.Vector (M.Matrix Float) -> V.Vector (M.Matrix Float) -> V.Vector (M.Matrix Float)
+convolveByChannel :: Kernel -> Image -> Image
 convolveByChannel = V.zipWith convolve
 
-
-kernelExcitation :: V.Vector (M.Matrix Float) -> V.Vector (M.Matrix Float) -> Float ->  M.Matrix Float
+kernelExcitation :: Kernel -> Image -> Bias -> RealMatrix
 kernelExcitation image kernel bias = (+bias) <$> sumMatrices (convolveByChannel kernel image)
 
-convLayerExcitation :: V.Vector (V.Vector (M.Matrix Float)) -> V.Vector Float -> V.Vector (M.Matrix Float) -> V.Vector (M.Matrix Float)
+convLayerExcitation :: KernelTensor -> BiasVector -> Image -> Image
 convLayerExcitation kernelTensor biasVector image = V.zipWith (kernelExcitation image) kernelTensor biasVector
 
 tensorialExcitation :: TensorialLayer -> Image -> Image
@@ -100,7 +81,6 @@ diffInputSingleChannel dE_dH kernel = let indices = [ (i, j) | i <- [1..(M.nrows
 diffInputMultiChannel :: RealMatrix -> Kernel -> Image
 diffInputMultiChannel dE_dH = fmap (diffInputSingleChannel dE_dH)
 
-{- TODO: fix semantics. Should sum accross multiple channels of the resulting dE_dI's -}
 diffInput :: Image -> KernelTensor -> Image
 diffInput dE_dHChannels kernelTensor = V.sum (V.zipWith diffInputMultiChannel dE_dHChannels kernelTensor)
 
@@ -112,14 +92,12 @@ diffBiasTensorialLayer :: TensorialLayer -> V.Vector (M.Matrix Float) -> V.Vecto
 diffBiasTensorialLayer ConvolutionalLayer {} deltas = diffKernelBias deltas
 diffBiasTensorialLayer MaxPoolingLayer {} deltas = V.empty
 
-{- TODO: dE_dH functions for tensorial layers -}
 deltasConvSingleChannel :: (Float -> Float) -> RealMatrix -> RealMatrix -> RealMatrix
 deltasConvSingleChannel activationDerivative excitationChannel = elemwiseMult (fmap activationDerivative excitationChannel)
 
 deltasConvMultiChannel :: (Float -> Float) -> Image -> Image -> Image
 deltasConvMultiChannel activationDerivative = V.zipWith (deltasConvSingleChannel activationDerivative)
 
-{- TODO -}
 backwardTensorialLayer :: TensorialLayer -> Image -> Image -> Image -> (Image, Image)
 backwardTensorialLayer (MaxPoolingLayer supportRows supportCols) inputChannels outputChannels dE_dOChannels = let dE_dO = backwardPoolingLayerMultiChannel supportRows supportCols dE_dOChannels outputChannels inputChannels in
                                                                                                               (dE_dO, dE_dO)
@@ -144,3 +122,14 @@ diffTensorialLayerWithState :: TensorialLayer -> LayerState -> BackpropagationRe
 diffTensorialLayerWithState tensorialLayer (ConvolutionalLayerState input _) (TensorialLayerBPResult _ dE_dH) = (diffTensorialLayer tensorialLayer input dE_dH, diffBiasTensorialLayer tensorialLayer dE_dH)
 diffTensorialLayerWithState tensorialLayer (MaxPoolingLayerState input _) (TensorialLayerBPResult _ dE_dH) = (diffTensorialLayer tensorialLayer input dE_dH, diffBiasTensorialLayer tensorialLayer dE_dH)
 diffTensorialLayerWithState x y z = error "Bad pairing of layer state and input"
+
+{- Utility function -}
+resultingDimension :: TensorialLayer -> (Int, Int, Int) -> (Int, Int, Int)
+resultingDimension (ConvolutionalLayer tensor _ _ _) (channels, rows, cols) =
+            let numFilters = V.length tensor in
+            let numRows = M.nrows $ (V.head . V.head) tensor in
+            let numCols = M.ncols $ (V.head . V.head) tensor in
+            (numFilters, rows - numRows + 1, cols - numCols + 1)
+
+resultingDimension (MaxPoolingLayer suppRows suppCols) (channels, rows, cols) =
+            (channels, rows `quot` suppRows, cols `quot` suppCols)

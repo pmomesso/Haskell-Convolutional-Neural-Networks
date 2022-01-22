@@ -23,6 +23,13 @@ denseActivation (DenseLayer mat bias act der) x = let excitation = denseExcitati
 denseActivation (SoftmaxLayer mat bias) x = let excitation = denseExcitation (SoftmaxLayer mat bias) x in
                                             softmax excitation
 
+forwardDenseLayer :: DenseLayer -> V.Vector Float -> (LayerState, V.Vector Float)
+forwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputs = let excitationState = denseExcitation (DenseLayer weights bias activation activationDerivative) inputs in
+                                                                                let activationState = denseActivation (DenseLayer weights bias activation activationDerivative) inputs in
+                                                                                (DenseLayerState inputs excitationState, activationState)
+forwardDenseLayer (SoftmaxLayer weights bias) inputs = let excitationState = denseExcitation (SoftmaxLayer weights bias) inputs in
+                                                  let activationState = denseActivation (SoftmaxLayer weights bias) inputs in
+                                                  (SoftmaxLayerState inputs excitationState, activationState)
 
 backwardDenseLayer :: DenseLayer -> V.Vector Float -> V.Vector Float -> V.Vector Float -> (RealMatrix, V.Vector Float)
 backwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputVector excitationVec dE_dO =
@@ -34,17 +41,6 @@ backwardDenseLayer (SoftmaxLayer weights bias) inputVector excitationVec dE_dO =
                                                                       let deltasVector = softmaxDeltas excitationVec dE_dO in
                                                                       let deltasColVector = M.colVector deltasVector in
                                                                       (M.transpose weights * deltasColVector, deltasVector)
-
-
-forwardDenseLayer :: DenseLayer -> V.Vector Float -> (LayerState, V.Vector Float)
-forwardDenseLayer (DenseLayer weights bias activation activationDerivative) inputs = let excitationState = denseExcitation (DenseLayer weights bias activation activationDerivative) inputs in
-                                                                                let activationState = denseActivation (DenseLayer weights bias activation activationDerivative) inputs in
-                                                                                (DenseLayerState inputs excitationState, activationState)
-forwardDenseLayer (SoftmaxLayer weights bias) inputs = let excitationState = denseExcitation (SoftmaxLayer weights bias) inputs in
-                                                  let activationState = denseActivation (SoftmaxLayer weights bias) inputs in
-                                                  (SoftmaxLayerState inputs excitationState, activationState)
-
-
 
 diffDenseLayer :: V.Vector Float -> V.Vector Float -> M.Matrix Float
 diffDenseLayer inputs deltas = M.colVector deltas * M.transpose (M.colVector inputs)
@@ -58,9 +54,6 @@ diffDenseLayer2 SoftmaxLayer {} input delta = diffDenseLayer input delta
 diffDenseBias2 :: DenseLayer -> V.Vector Float -> RealMatrix
 diffDenseBias2 DenseLayer {} delta = diffDenseBias delta
 diffDenseBias2 SoftmaxLayer {} delta = diffDenseBias delta
-
-{- TODO: dE_dW on whole networks -}
--- data GradientAction = NoAction | ConvolutionalLayerAction Image (V.Vector Float) | DenseLayerAction RealMatrix (V.Vector Float) 
 
 diffDenseLayerWithState :: DenseLayer -> LayerState -> BackpropagationResult -> (RealMatrix, RealMatrix)
 diffDenseLayerWithState denseLayer (DenseLayerState input _) (DenseLayerBPResult _ dE_dH) = (diffDenseLayer2 denseLayer input dE_dH, diffDenseBias2 denseLayer dE_dH)

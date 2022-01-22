@@ -95,11 +95,6 @@ backpropagationStepTensorial (tensorialLayer, tensorialLayerState) (EmptyBPResul
                                                                   _ -> error "Bad pairing of layer with state"
 backpropagationStepTensorial _ _ = error "Bad pairing of layer with state"
 
-extractLayerExcitation :: LayerState -> Image
-extractLayerExcitation (ConvolutionalLayerState _ exc) = exc
-extractLayerExcitation (MaxPoolingLayerState input output) = output
-extractLayerExcitation _ = error "not implemented"
-
 backpropagationNetwork :: NeuralNetwork -> [LayerState] -> [LayerState] -> V.Vector Float -> ([BackpropagationResult], [BackpropagationResult])
 backpropagationNetwork (ConvolutionalNetwork tensorialNetwork denseNetwork) tensorialLayerStates denseLayerStates dE_dO =
                                                                                         let denseBPResults = backwardDenseNetwork denseNetwork denseLayerStates dE_dO in
