@@ -6,19 +6,17 @@ import System.Random
 import System.Environment (getArgs)
 import Data.List.Split (splitOn)
 import Functions
-import Layers
-import qualified Layers as L
 import Control.Monad ( zipWithM )
 import Codec.Picture (readImage, Pixel (pixelAt), convertRGB8, DynamicImage (ImageY8), Image (Image, imageHeight, imageWidth), PixelRGB8 (PixelRGB8))
 import System.Directory (listDirectory)
 import Control.Applicative (Applicative(liftA2))
+
 import Dataset
-
-extractCategory :: CategoricalDataPoint a -> Category
-extractCategory (CategoricalDataPoint _ c) = c
-
-extractTensorial (ConvolutionalNetwork tn _) = tn
-extractDense (ConvolutionalNetwork _ dn) = dn
+import Network
+import DenseLayer
+import TensorialLayer
+import CommonTypes
+import qualified CommonTypes as CT
 
 sampleSize = 100
 eta :: Float
@@ -35,7 +33,7 @@ main = do
     let trainingHistory = trainClassificationNetwork network eta sampledDataset crossEntropy dCrossEntropy
     print $ trainingErrorsList trainingHistory
     -- print $ map extractCategory sampledDataset
-    putStr $ unlines (zipWith (curry show) (map extractCategory dataset) (map (forwardNeuralNetwork ((snd . last) trainingHistory) . extractInput) dataset))
+    putStr $ unlines (zipWith (curry show) (map extractCat dataset) (map (forwardNeuralNetwork ((snd . last) trainingHistory) . extractInput) dataset))
     return ()
 
 trainingErrorsList :: [(a, b)] -> [a]
@@ -43,13 +41,13 @@ trainingErrorsList = map fst
 
 sampleDataSet dataset sampleSize = shuffle sampleSize dataset
 
-sampleDataSetFromPath :: FilePath -> Int -> IO [CategoricalDataPoint L.Image]
+sampleDataSetFromPath :: FilePath -> Int -> IO [CategoricalDataPoint CT.Image]
 sampleDataSetFromPath path sampleSize = readDataset path >>= shuffle sampleSize
 
 pair :: [a -> b] -> [[a]] -> [[b]]
 pair = zipWith fmap
 
-readDataset :: FilePath -> IO [CategoricalDataPoint L.Image]
+readDataset :: FilePath -> IO [CategoricalDataPoint CT.Image]
 readDataset dir = do
     let cleanDir = if last dir == '/' then dir else dir ++ "/"
     classesDirs <- listDirectory cleanDir
@@ -59,7 +57,7 @@ readDataset dir = do
     let imagesWithCategories = concat $ pair (fmap (flip CategoricalDataPoint) classes) imagesNoCategories
     return imagesWithCategories
 
-readImagesFromDir :: String -> IO [L.Image]
+readImagesFromDir :: String -> IO [CT.Image]
 readImagesFromDir dirPath = do
     paths <- listDirectory dirPath
     let cleanPaths = fmap (dirPath++) paths
@@ -77,7 +75,7 @@ readNetworkFromStdin = do
     denseNetwork <- zipWithM randomDenseLayerFromDescr dimensions denseTowerStringList
     return $ ConvolutionalNetwork tensorialNetwork denseNetwork
 
-readGrayscaleFromPath :: String -> IO L.Image
+readGrayscaleFromPath :: String -> IO CT.Image
 readGrayscaleFromPath imagePath = do
     img <- readImage imagePath
     case img of
